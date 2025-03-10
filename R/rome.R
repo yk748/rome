@@ -102,7 +102,7 @@ rome <- function(x, y, method = c("huber"), weights=NULL,
   # ------------------------------------------- #
   # Fitting
   if (method == "huber") {
-    fit <- .C("ecd_hube", 
+    fit <- .C("ecd_huber", 
               double(p*nlambda), 
               integer(nlambda), 
               as.double(lambda), 
