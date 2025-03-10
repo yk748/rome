@@ -1,0 +1,1075 @@
+#' fit a complex-valued lasso for a path of lambda values
+#'
+#' Fit a complex-valued lasso formulation for a path of lambda values.
+#' \code{classo.path} solves the elastic net problem for a path of lambda values.
+#'
+#' @param x Complex-valued input matrix, of dimension nobs by nvar;
+#' each row is an observation vector.
+#' @param y Complex-valued response variable, nobs dimensional vector.
+#' @param family To match the conventional functions used in \code{glmnet}, "gaussian" is assumed. This has to be eliminated.
+#' @param weights Observation weights. Default is 1 for each observation.
+#' @param standardized Logical flag for x variable standardized beforehand; i.e. for n and p by nobs and nvar,
+#' \deqn{\|X_j\|=\sqrt{n} \textrm{for all }j=1,\ldots,p}
+#' is satisfied for the input x. Default is \code{FALSE}.
+#' @param lambda A user supplied \code{lambda} sequence. Default is \code{NULL}.
+#' @param nlambda The number of \code{lambda} values. Default is 100.
+#' @param lambda.min.ratio If \code{nobs} < \code{nvars}, the default is 0.01.
+#' @param intercept Should intercept be set to zero (default=FALSE) or fitted (FALSE)? This default is reversed from \code{glmnet} package.
+#' @param thresh Convergence threshold for coordinate descent. Each inner
+#' coordinate-descent loop continues until the maximum change in the objective after any
+#' coefficient update is less than thresh times the null deviance. Default value is \code{1e-10}.
+#' @param trace.it Controls how much information is printed to screen. Default is
+#' \code{trace.it=0} (no information printed). If \code{trace.it=1}, a progress
+#' bar is displayed. If \code{trace.it=2}, some information about the fitting
+#' procedure is printed to the console as the model is being fitted.
+#'
+#' @return An object with class "classofit" and "classo".
+#' \item{a0}{Intercept sequence of length \code{length(lambda)}.}
+#' \item{beta}{A \code{nvars x length(lambda)} matrix of coefficients, stored in
+#' sparse matrix format.}
+#' \item{df}{The number of nonzero coefficients for each value of lambda.}
+#' \item{dim}{Dimension of coefficient matrix.}
+#' \item{lambda}{The actual sequence of lambda values used. When alpha=0, the
+#' largest lambda reported does not quite give the zero coefficients reported
+#' (lambda=inf would in principle). Instead, the largest lambda for alpha=0.001
+#' is used, and the sequence of lambda values is derived from this.}
+#' \item{dev.ratio}{The fraction of (null) deviance explained. The deviance
+#' calculations incorporate weights if present in the model. The deviance is
+#' defined to be 2*(loglike_sat - loglike), where loglike_sat is the log-likelihood
+#' for the saturated model (a model with a free parameter per observation).
+#' Hence dev.ratio=1-dev/nulldev.}
+#' \item{nulldev}{Null deviance (per observation). This is defined to be
+#' 2*(loglike_sat -loglike(Null)). The null model refers to the intercept model.}
+#' \item{npasses}{Total passes over the data summed over all lambda values.}
+#' \item{jerr}{Error flag, for warnings and errors (largely for internal
+#' debugging).}
+#' \item{call}{The call that produced this object.}
+#' \item{family}{Family used for the model.}
+#' \item{nobs}{Number of observations.}
+#'
+#'
+classo.path <- function(x,y,family = gaussian(),
+                        weights=NULL,
+                        standardized=FALSE,
+                        lambda=NULL,
+                        nlambda=100,
+                        lambda.min.ratio=ifelse(nobs<nvars,1e-2,1e-4),
+                        intercept = FALSE,
+                        thresh = 1e-10,
+                        maxit = 100000,
+                        trace.it = 0, ...){
+
+  # x, # included
+  # y, # included
+  # weights=NULL, # included
+  # lambda = NULL, # included
+  # nlambda = 100, # included
+  # lambda.min.ratio = ifelse(nobs<nvars, 0.01, 0.0001), # included
+  # alpha = 1.0, # deleted
+  # offset = NULL, # deleted
+  # family = gaussian(), # included
+  # standardize = TRUE, # deleted
+  # intercept = FALSE, # included
+  # thresh = 1e-10, # included
+  # maxit = 100000, # included
+  # penalty.factor = rep(1.0, nvars), # deleted
+  # exclude = integer(0), # deleted
+  # lower.limits = -Inf, # deleted
+  # upper.limits = Inf, # deleted
+  # trace.it = 0 # included
+
+  # ------------------------------------------------ #
+  # Prepare all the generic arguments
+  this.call <- match.call()
+
+  np <- dim(x)
+  if(is.null(np) || (np[2] <= 1)) {
+    stop("x should be a matrix with 2 or more columns")
+  }
+  nobs <- np[1]
+
+  # Unlike glmnet, we treat the intercept term by merging them into the design matrix
+  # and treat it p+1-dimensional object.
+  if (intercept){
+    x <- cbind(rep(1,nobs),x)
+    nvars <- np[2] + 1
+
+  }else{
+    nvars <- np[2]
+  }
+
+  # ------------------------------------------------ #
+  # get feature variable names
+  vnames <- colnames(x)
+  if(is.null(vnames)){
+    vnames <- paste("V",seq(nvars),sep="")
+  }
+
+  # ------------------------------------------------ #
+  # check weights
+  if(is.null(weights)) {
+    weights <- rep(1,nobs)
+  }else if (length(weights) != nobs){
+    stop(paste("Number of elements in weights (",length(weights),")
+                not equal to the number of rows of x (",nobs,")",sep=""))
+  }
+  weights <- as.double(weights)
+
+  # ------------------------------------------------ #
+  # standardize x if necessary
+  if (intercept) {
+    # YK: do we need this?
+    # Compute weighted mean and variance of columns of x
+    # needed to detect constant columns below, and later if standarization
+    meansd <- weighted_mean_sd(x, weights)
+    xm <- meansd$mean
+  } else {
+    xm <- rep(0.0, times = nvars)
+  }
+
+  if (standardized) {
+    for (j in 1:nvars){
+      x[,j] <- x[,j] / sqrt(mean(Mod(x[,j])^2))
+    }
+  }
+
+  # ------------------------------------------------ #
+  # check on limit
+  control <- classo.control()
+  if (thresh >= control$epsnr){
+        warning("thresh should be smaller than glmnet.control()$epsnr",  call. = FALSE)
+  }
+
+  # ------------------------------------------------ #
+  # get null deviance and lambda max (no need!)
+  # note: need extra check
+  start_val <- get_start(x, y, weights, family, intercept)
+
+  # ------------------------------------------------ #
+  # work out lambda values
+  nlam <- as.integer(nlambda)
+  user_lambda <- FALSE   # did user provide their own lambda values?
+  if (is.null(lambda)) {
+    if (lambda.min.ratio >= 1) {
+      stop("lambda.min.ratio should be less than 1")
+    }
+    # compute lambda max: to add code here
+    lambda_max <- start_val$lambda_max
+
+    # compute lambda sequence
+    ulam <- exp(seq(log(lambda_max), log(lambda_max * lambda.min.ratio), length.out = nlam))
+  } else {  # user provided lambda values
+    user_lambda <- TRUE
+    if (any(lambda < 0)) {
+      stop("lambdas should be non-negative")
+    }
+    ulam <- as.double(rev(sort(lambda)))
+    nlam <- as.integer(length(lambda))
+  }
+
+  # ------------------------------------------------ #
+  # start progress bar
+  if (trace.it == 1) {
+    pb <- utils::txtProgressBar(min = 0, max = nlam, style = 3)
+  }
+
+  beta <- matrix(0, nrow = nvars, ncol = nlam)
+  dev.ratio <- rep(NA, length = nlam)
+  fit <- NULL
+  # mnl <- min(nlam, control$mnlam)
+  mnl <- nlam
+  for (k in 1:nlam) {
+    # get the correct lambda value to fit
+    if (k > 1) {
+      cur_lambda <- ulam[k]
+    } else {
+      # YK: why control$big is so large?
+      # cur_lambda <- ifelse(user_lambda, ulam[k], control$big)
+      cur_lambda <- ifelse(user_lambda, ulam[k], ulam[k])
+    }
+
+    if (trace.it == 2) {
+      cat("Fitting lambda index", k, ":", ulam[k], fill = TRUE)
+    }
+
+    # ------------------------------------------------ #
+    fit <- classo.fit(x, y, weights / sum(weights), cur_lambda,
+                      family = family, intercept = intercept, thresh = thresh,
+                      maxit = maxit,
+                      warm = fit, from.classo.path = TRUE, save.fit = TRUE,
+                      trace.it = trace.it)
+
+    if (trace.it == 1) {
+      utils::setTxtProgressBar(pb, k)
+    }
+
+    # ------------------------------------------------ #
+    # if error code non-zero, a non-fatal error must have occurred
+    # print warning, ignore this lambda value and return result
+    # for all previous lambda values
+    if (fit$jerr != 0) {
+      errmsg <- jerr.classofit(fit$jerr, maxit, k)
+      warning(errmsg$msg, call. = FALSE)
+      k <- k - 1
+      break
+    }
+
+    beta[, k] <- as.matrix(fit$beta)
+
+    # ------------------------------------------------ #
+    # YK: We do not use dev.ratio.
+    # dev.ratio[k] <- fit$dev.ratio
+    # # early stopping if dev.ratio almost 1 or no improvement
+    # if (k >= mnl && user_lambda == FALSE) {
+    #   if (dev.ratio[k] > control$devmax) {
+    #     break
+    #   }
+    #   else if (k > 1) {
+    #     if (dev.ratio[k] - dev.ratio[k-1] < control$fdev * dev.ratio[k]){
+    #       break
+    #     }
+    #   }
+    # }
+  }
+
+
+  if (trace.it == 1) {
+    utils::setTxtProgressBar(pb, nlam)
+    cat("", fill = TRUE)
+  }
+
+  # ------------------------------------------------ #
+  # truncate beta, dev.ratio, lambda if necessary
+  if (k < nlam) {
+    beta <- beta[, 1:k, drop = FALSE]
+    dev.ratio <- dev.ratio[1:k]
+    ulam <- ulam[1:k]
+  }
+
+  # ------------------------------------------------ #
+  # output
+  stepnames <- paste0("s", 0:(length(ulam) - 1))
+  dimnames(beta) <- list(vnames, stepnames)
+
+  out <- list()
+  out$beta <- beta
+  out$df <- colSums(abs(beta) > 0)
+  out$dim <- dim(beta)
+  out$lambda <- ulam
+  out$npasses <- fit$npasses
+  out$jerr <- fit$jerr
+  out$call <- this.call
+  out$nobs <- nobs
+  class(out) <- c("classofit", "classo")
+
+  return(out)
+}
+
+
+#' Fit a classo for a single value of lambda
+#'
+#' WARNING: Users should not call \code{classo.fit} directly.
+#' Higher-level functions in this package call \code{classo.fit} as a subroutine.
+#' If a warm start object is provided, some of the other arguments in the function may be overriden.
+#'
+#' \code{classo.fit} solves the complex-valued lasso  problem for a single, user-specified
+#' value of lambda.
+#'
+#' In terms of standardization: \code{classo.fit} does not standardize \code{x}
+#' and \code{weights}.
+#'
+#' @param x Input matrix, of dimension \code{nobs x nvars}; each row is an
+#' observation vector. If it is a sparse matrix, it is assumed to be unstandardized.
+#' It should have attributes \code{xm} and \code{xs}, where \code{xm(j)} and
+#' \code{xs(j)} are the centering and scaling factors for variable j respectively.
+#' If it is not a sparse matrix, it is assumed that any standardization needed
+#' has already been done.
+#' @param y Quantitative response variable.
+#' @param weights Observation weights. \code{classo.fit} does NOT standardize
+#' these weights.
+#' @param lambda A single value for the \code{lambda} hyperparameter.
+#' @param intercept Should intercept set to zero (default=FALSE) or be fitted (TRUE)?
+#' @param thresh Convergence threshold for coordinate descent. Each inner
+#' coordinate-descent loop continues until the maximum change in the objective
+#' after any coefficient update is less than thresh times the null deviance.
+#' Default value is \code{1e-10}.
+#' @param maxit Maximum number of passes over the data; default is \code{10^5}.
+#' (If a warm start object is provided, the number of passes the warm start object
+#' performed is included.)
+#' @param warm Either a \code{classofit} object or a list (with names \code{beta}
+#' and \code{a0} containing coefficients and intercept respectively) which can
+#' be used as a warm start. Default is \code{NULL}, indicating no warm start.
+#' For internal use only.
+#' @param from.classo.path Was \code{classo.fit()} called from \code{classo.path()}?
+#' Default is FALSE.
+#' @param save.fit Return the warm start object? Default is FALSE.
+#' @param trace.it Controls how much information is printed to screen. If
+#' \code{trace.it=2}, some information about the fitting procedure is printed to
+#' the console as the model is being fitted. Default is \code{trace.it=0}
+#' (no information printed). (\code{trace.it=1} not used for compatibility with
+#' \code{classo.path}.)
+#'
+#' @return An object with class "classofit" and "classo". The list
+#' returned contains more keys than that of a "classo" object.
+#' \item{a0}{Intercept value.}
+#' \item{beta}{A \code{nvars x 1} matrix of coefficients, stored in sparse matrix
+#' format.}
+#' \item{df}{The number of nonzero coefficients.}
+#' \item{dim}{Dimension of coefficient matrix.}
+#' \item{lambda}{Lambda value used.}
+#' \item{dev.ratio}{The fraction of (null) deviance explained. The deviance
+#' calculations incorporate weights if present in the model. The deviance is
+#' defined to be 2*(loglike_sat - loglike), where loglike_sat is the log-likelihood
+#' for the saturated model (a model with a free parameter per observation).
+#' Hence dev.ratio=1-dev/nulldev.}
+#' \item{nulldev}{Null deviance (per observation). This is defined to be
+#' 2*(loglike_sat -loglike(Null)). The null model refers to the intercept model.}
+#' \item{npasses}{Total passes over the data.}
+#' \item{jerr}{Error flag, for warnings and errors (largely for internal
+#' debugging).}
+#' \item{call}{The call that produced this object.}
+#' \item{nobs}{Number of observations.}
+#' \item{warm_fit}{If \code{save.fit=TRUE}, output of C++ routine, used for
+#' warm starts. For internal use only.}
+#' \item{family}{Family used for the model.}
+#' \item{converged}{A logical variable: was the algorithm judged to have
+#' converged?}
+#' \item{obj_function}{Objective function value at the solution.}
+#'
+classo.fit <- function(x, y,
+                       weights,
+                       lambda,
+                       family = gaussian(),
+                       intercept = FALSE,
+                       thresh = 1e-10,
+                       maxit = 100000,
+                       warm = NULL,
+                       from.classo.path = FALSE,
+                       save.fit = FALSE,
+                       trace.it = 0) {
+
+    # x, # included
+    # y, # included
+    # weights, # included
+    # lambda, # included
+    # alpha = 1.0, # deleted
+    # offset = rep(0, nobs), # deleted
+    # family = gaussian(), # included
+    # intercept = FALSE, # included
+    # thresh = 1e-10, # included
+    # maxit = 100000, # included
+    # penalty.factor = rep(1.0, nvars), # deleted
+    # exclude = c(), # deleted
+    # lower.limits = -Inf, # deleted
+    # upper.limits = Inf, # deleted
+    # warm = NULL, # included
+    # from.classo.path = FALSE, # included
+    # save.fit = FALSE, # included
+    # trace.it = 0 # included
+
+    # ------------------------------------------------ #
+    this.call <- match.call()
+    control <- classo.control()
+
+    # Prepare all the generic arguments
+    nobs <- nrow(x)
+
+    # If not called from classo.path,
+    # check the existence of intercept and standarization
+    if (!from.classo.path){
+      if (intercept){
+        x <- cbind(rep(1,nobs),x)
+        nvars <- np[2] + 1
+      }
+
+      if (standardized) {
+        for (j in 1:nvars){
+          x[,j] <- x[,j] / sqrt(mean(Mod(x[,j])^2))
+        }
+      }
+
+    }else{
+      nvars <- ncol(x)
+
+    }
+
+    # ------------------------------------------------ #
+    # YK: Do we need this?
+    # get the relevant family functions
+    variance <- family$variance
+    linkinv <- family$linkinv
+    if (!is.function(variance) || !is.function(linkinv))
+      stop("'family' argument seems not to be a valid family object",
+           call. = FALSE)
+    mu.eta <- family$mu.eta
+
+    unless.null <- function(x, if.null) {
+      if (is.null(x)) if.null else x
+    }
+    valideta <- unless.null(family$valideta, function(eta) TRUE)
+    validmu <- unless.null(family$validmu, function(mu) TRUE)
+
+    # ------------------------------------------------ #
+    # YK: Do we need this?
+    # computation of null deviance (get mu in the process)
+    if (is.null(warm)) {
+      start_val <- get_start(x, y, weights, family, intercept)
+      mu <- start_val$mu
+      fit <- NULL
+      eta <- family$linkfun(mu)
+      coefold <- rep(0, nvars)   # initial coefs = 0
+
+    } else {
+      if (inherits(warm,"classofit")) {
+        if (!is(warm$warm_fit,"warmfit")) {
+          stop("Invalid warm start object")
+        }
+
+        fit <- warm
+        nulldev <- fit$nulldev
+        coefold <- fit$warm_fit$b   # prev value for coefficients
+        eta <- get_eta(x,coefold)
+        mu <- linkinv(eta)
+
+      } else if (inherits(warm,"list") && "beta" %in% names(warm)) {
+          nulldev <- get_start(x, y, weights, family, intercept)$nulldev
+          fit <- warm
+          coefold <- fit$beta   # prev value for coefficients
+          eta <- get_eta(x,beta)
+          mu <- linkinv(eta)
+      } else {
+        stop("Invalid warm start object")
+      }
+    }
+
+    # ------------------------------------------------ #
+    if (!(validmu(mu) && valideta(eta))){
+        stop("cannot find valid starting values: please specify some",
+             call. = FALSE)
+    }
+
+    start <- NULL     # current value for coefficients
+    obj_val_old <- obj_function(y, mu, weights, family, lambda, coefold)
+    if (trace.it == 2) {
+      cat("Warm Start Objective:", obj_val_old, fill = TRUE)
+    }
+    conv <- FALSE      # converged?
+
+    # ------------------------------------------------ #
+    # classo loop
+    for (iter in 1L:control$mxitnr) {
+
+      # some checks for NAs/zeros
+      varmu <- variance(mu)
+      if (anyNA(varmu)) {
+        stop("NAs in V(mu)")
+      }
+      if (any(varmu == 0)) {
+        stop("0s in V(mu)")
+      }
+      mu.eta.val <- mu.eta(eta)
+      if (any(is.na(mu.eta.val))) {
+        stop("NAs in d(mu)/d(eta)")
+      }
+
+      # ------------------------------------------------ #
+      # compute working response and weights
+      z <- eta + (y - mu)/mu.eta.val
+      w <- (weights * mu.eta.val^2)/variance(mu)
+
+      # ------------------------------------------------ #
+      # have to update the weighted residual in our fit object
+      # (in theory g and iy should be updated too, but we actually recompute g
+      # and iy anyway in wls.f)
+      if (!is.null(fit)) {
+        fit$warm_fit$r <- w * (z - eta)
+      }
+
+      # ------------------------------------------------ #
+      # do WLS with warmstart from previous iteration
+      fit <- cl.fit(x, z, w,
+                    lambda,
+                    thresh = thresh,
+                    maxit = maxit,
+                    warm = fit,
+                    save.fit = TRUE)
+      if (fit$jerr != 0) {
+        return(list(jerr = fit$jerr))
+      }
+
+      # ------------------------------------------------ #
+      # update coefficients, eta, mu and obj_val
+      start <- fit$warm_fit$b
+      eta <- get_eta(x,start)
+      mu <- linkinv(eta)
+      obj_val <- obj_function(y, mu, weights, family, lambda, start)
+      if (trace.it == 2) {
+        cat("Iteration", iter, "Objective:", obj_val, fill = TRUE)
+      }
+
+      # ------------------------------------------------ #
+      # YK: Due to the modifiation, this doesn't improve anything.
+      # boundary <- FALSE
+      # halved <- FALSE  # did we have to halve the step size?
+      # # if objective function is not finite, keep halving the stepsize until it is finite
+      # # for the halving step, we probably have to adjust fit$g as well?
+      # if (!is.finite(obj_val) || obj_val > control$big) {
+      #   warning("Infinite objective function!", call. = FALSE)
+      #   if (is.null(coefold) || is.null(intold))
+      #     stop("no valid set of coefficients has been found: please supply starting values",
+      #          call. = FALSE)
+      #   warning("step size truncated due to divergence", call. = FALSE)
+      #   ii <- 1
+      #   while (!is.finite(obj_val) || obj_val > control$big) {
+      #     if (ii > control$mxitnr){
+      #                   stop("inner loop 1; cannot correct step size", call. = FALSE)
+      #     }
+      #     ii <- ii + 1
+      #     start <- (start + coefold)/2
+      #     eta <- get_eta(x,beta)
+      #     mu <- linkinv(eta)
+      #     obj_val <- obj_function(y, mu, weights, family, lambda, alpha, start, vp)
+      #     if (trace.it == 2) {
+      #       cat("Iteration", iter, " Halved step 1, Objective:", obj_val, fill = TRUE)
+      #     }
+      #   }
+      #   boundary <- TRUE
+      #   halved <- TRUE
+      # }
+
+      # ------------------------------------------------ #
+      # if some of the new eta or mu are invalid, keep halving stepsize until valid
+      # YK: Due to the modifiation, this doesn't improve anything.
+      # if (!(valideta(eta) && validmu(mu))) {
+      #   warning("Invalid eta/mu!", call. = FALSE)
+      #   if (is.null(coefold) || is.null(intold)){
+      #               stop("no valid set of coefficients has been found: please supply starting values",
+      #          call. = FALSE)
+      #   }
+      #   warning("step size truncated: out of bounds", call. = FALSE)
+      #   ii <- 1
+      #   while (!(valideta(eta) && validmu(mu))) {
+      #     if (ii > control$mxitnr){
+      #       stop("inner loop 2; cannot correct step size", call. = FALSE)
+      #     }
+      #     ii <- ii + 1
+      #     start <- (start + coefold)/2
+      #     eta <- get_eta(x,beta)
+      #     mu <- linkinv(eta)
+      #   }
+      #   boundary <- TRUE
+      #   halved <- TRUE
+      #   obj_val <- obj_function(y, mu, weights, family, lambda, start)
+      #   if (trace.it == 2) {
+      #     cat("Iteration", iter, " Halved step 2, Objective:", obj_val, fill = TRUE)
+      #   }
+      # }
+
+      # # ------------------------------------------------ #
+      # YK: Due to the modifiation, this doesn't improve anything.
+      # # extra halving step if objective function value actually increased
+      # if (obj_val > obj_val_old + 1e-7) {
+      #   ii <- 1
+      #   while (obj_val > obj_val_old + 1e-7) {
+      #     if (ii > control$mxitnr){
+      #       stop("inner loop 3; cannot correct step size", call. = FALSE)
+      #     }
+      #     ii <- ii + 1
+      #     start <- (start + coefold)/2
+      #     eta <- get_eta(x,beta)
+      #     mu <- linkinv(eta)
+      #     obj_val <- obj_function(y, mu, weights, family, lambda, start)
+      #     if (trace.it == 2) {
+      #       cat("Iteration", iter, " Halved step 3, Objective:", obj_val, fill = TRUE)
+      #     }
+      #   }
+      #   halved <- TRUE
+      # }
+
+      # # if we did any halving, we have to update the coefficients, intercept
+      # # and weighted residual in the warm_fit object
+      # if (halved) {
+      #   fit$warm_fit$a <- start
+      #   fit$warm_fit$r <- w * (z - eta)
+      # }
+
+      # ------------------------------------------------ #
+      # test for convergence
+      if (abs(obj_val - obj_val_old)/(0.1 + abs(obj_val)) < control$epsnr) {
+        conv <- TRUE
+        break
+      }else {
+        coefold <- start
+        obj_val_old <- obj_val
+      }
+    }
+
+    # ------------------------------------------------ #
+    # checks on convergence and fitted values
+    if (!conv){
+      warning("classo.fit: algorithm did not converge", call. = FALSE)
+    }
+    # if (boundary){
+    #   warning("classo.fit: algorithm stopped at boundary value", call. = FALSE)
+    # }
+
+    # ------------------------------------------------ #
+    # some extra warnings, printed only if trace.it == 2
+    if (trace.it == 2) {
+      eps <- 10 * .Machine$double.eps
+    }
+
+    # ------------------------------------------------ #
+    # prepare output object
+    if (save.fit == FALSE) {
+      fit$warm_fit <- NULL
+    }
+
+    # ------------------------------------------------ #
+    # overwrite values from classo.fit object
+    fit$call <- this.call
+
+    # ------------------------------------------------ #
+    # add new key-value pairs to list
+    fit$converged <- conv
+    # fit$boundary <- boundary
+    fit$obj_function <- obj_val
+
+    class(fit) <- c("classofit", "classo")
+    fit
+}
+
+#' Solve complex-valued weighted least squares (WLS) problem for a single lambda value
+#'
+#' Solves the weighted least squares (WLS) problem for a single lambda value.
+#' Internal function that users should not call directly.
+#'
+#' WARNING: Users should not call \code{cl.fit} directly. Higher-level functions
+#' in this package call \code{cl.fit} as a subroutine. If a warm start object
+#' is provided, some of the other arguments in the function may be overriden.
+#'
+#' \code{cl.fit} is essentially a wrapper around a Fortran subroutine which
+#' minimizes
+#'
+#' \deqn{1/2 \sum w_i (y_i - X_i^T \beta)^2 + \sum \lambda
+#' |\beta|,}
+#'
+#' over \eqn{\beta}. If \code{intercept = TRUE}, then the term in the first sum is
+#' \eqn{w_i (y_i - \beta_0 - X_i^T \beta)^2}, and we are minimizing over both
+#' \eqn{\beta_0} and \eqn{\beta}.
+#'
+#' @param x Input matrix, of dimension \code{nobs x nvars}; each row is an
+#' observation vector. If it is a sparse matrix, it is assumed to be unstandardized.
+#' It should have attributes \code{xm} and \code{xs}, where \code{xm(j)} and
+#' \code{xs(j)} are the centering and scaling factors for variable j respsectively.
+#' If it is not a sparse matrix, it is assumed that any standardization needed
+#' has already been done.
+#' @param y Quantitative response variable.
+#' @param weights Observation weights. \code{elnet.fit} does NOT standardize
+#' these weights.
+#' @param lambda A single value for the \code{lambda} hyperparameter.
+#' @param intercept Should intercept set to zero (default=FALSE) or be fitted (TRUE)?
+#' @param thresh Convergence threshold for coordinate descent. Each inner
+#' coordinate-descent loop continues until the maximum change in the objective
+#' after any coefficient update is less than thresh times the null deviance.
+#' Default value is \code{1e-7}.
+#' @param maxit Maximum number of passes over the data; default is \code{10^5}.
+#' (If a warm start object is provided, the number of passes the warm start object
+#' performed is included.)
+#' @param warm Either a \code{classofit} object or a list (with names \code{beta}
+#' and \code{a0} containing coefficients and intercept respectively) which can
+#' be used as a warm start. Default is \code{NULL}, indicating no warm start.
+#' For internal use only.
+#' @param save.fit Return the warm start object? Default is FALSE.
+#'
+#' @return An object with class "classofit" and "classo". The list returned has
+#' the same keys as that of a \code{glmnet} object, except that it might have an
+#' additional \code{warm_fit} key.
+#' \item{a0}{Intercept value.}
+#' \item{beta}{A \code{nvars x 1} matrix of coefficients, stored in sparse matrix
+#' format.}
+#' \item{df}{The number of nonzero coefficients.}
+#' \item{dim}{Dimension of coefficient matrix.}
+#' \item{lambda}{Lambda value used.}
+#' \item{dev.ratio}{The fraction of (null) deviance explained. The deviance
+#' calculations incorporate weights if present in the model. The deviance is
+#' defined to be 2*(loglike_sat - loglike), where loglike_sat is the log-likelihood
+#' for the saturated model (a model with a free parameter per observation).
+#' Hence dev.ratio=1-dev/nulldev.}
+#' \item{nulldev}{Null deviance (per observation). This is defined to be
+#' 2*(loglike_sat -loglike(Null)). The null model refers to the intercept model.}
+#' \item{npasses}{Total passes over the data.}
+#' \item{jerr}{Error flag, for warnings and errors (largely for internal
+#' debugging).}
+#' \item{offset}{Always FALSE, since offsets do not appear in the WLS problem.
+#' Included for compability with glmnet output.}
+#' \item{call}{The call that produced this object.}
+#' \item{nobs}{Number of observations.}
+#' \item{warm_fit}{If \code{save.fit=TRUE}, output of C++ routine, used for
+#' warm starts. For internal use only.}
+#'
+#' @useDynLib cxreg classocd_warm
+#' @export
+#'
+cl.fit <- function(x, y, weights, lambda,
+                   thresh = 1e-7, maxit = 100000,
+                   warm = NULL,
+                   save.fit = FALSE) {
+
+  # x, # included
+  # y, # included
+  # weights, # included
+  # lambda, # included
+  # alpha = 1.0, # deleted
+  # intercept = FALSE, # included
+  # thresh = 1e-7, # included
+  # maxit = 100000, # included
+  # penalty.factor = rep(1.0, nvars),
+  # exclude = c(), # deleted
+  # lower.limits = -Inf, # deleted
+  # upper.limits = Inf, # deleted
+  # warm = NULL, # included
+  # from.glmnet.fit = FALSE, # included
+  # save.fit = FALSE # included
+
+  # from classo.fit, these are required.
+  # fit
+  # fit$nulldev
+  # fit$warm_fit$a
+  # fit$warm_fit$aint
+  # fit$beta
+  # fit$a0
+  # fit$warm_fit$r
+  # fit$jerr
+
+  # ------------------------------------------------ #
+  this.call <- match.call()
+  internal.parms <- classo.control()
+
+  nobs <- as.integer(nrow(x))
+  nvars <- as.integer(ncol(x))
+
+  # ------------------------------------------------ #
+  # compute null deviance
+  ybar <- weighted.mean(y, weights)
+  nulldev <- sum(weights * (y - ybar)^2)
+
+  # ------------------------------------------------ #
+  # if class "classofit" warmstart object provided, pull whatever we want out of it
+  # else, prepare arguments, then check if coefs provided as warmstart
+  # (if only coefs are given as warmstart, we prepare the other arguments
+  # as if no warmstart was provided)
+  if (!is.null(warm) && "classofit" %in% class(warm)) {
+    warm <- warm$warm_fit
+
+    if (!is(warm,"warmfit")) {
+      stop("Invalid warm start object")
+    }
+    a <- warm$a
+
+  } else {
+
+    # ------------------------------------------------ #
+    nx <- nvars
+    a <- double(nvars)
+    alm0 <- double(1)
+
+    # check if coefs were provided as warmstart: if so, use them
+    if (!is.null(warm)) {
+      if (inherits(warm,"list") && "beta" %in% names(warm)) {
+        a <- as.double(warm$beta)
+        # mu <- drop(x %*% a)
+        mu <- x %*% a
+        r <- weights * (y - mu)
+        rsqc <- 1 - sum(weights * (y - mu)^2) / nulldev
+      } else {
+        stop("Invalid warm start object")
+      }
+    }
+  }
+
+  # ------------------------------------------------ #
+  # take out components of x and run Fortran subroutine
+  wls_fit <- .Fortran("classocd_warm",
+                      x = as.complex(x),
+                      y = as.complex(y),
+                      n = as.integer(nobs),
+                      p = as.integer(nvars),
+                      lambda = as.double(lambda),
+                      b0 = as.complex(rep(0,nvars)),
+                      b = as.complex(rep(0,nvars)))
+
+  # ------------------------------------------------ #
+  # no job error report for now.
+  wls_fit$jerr <- 0
+
+  warm_fit <- wls_fit
+
+  warm_fit[['no']] <- nobs
+  warm_fit[['ni']] <- nvars
+  class(warm_fit) <- "warmfit"
+
+  beta <- wls_fit$b
+  out <- list(
+    beta = beta,
+    df = sum(abs(wls_fit$b) > 0),
+    lambda = wls_fit$lambda,
+    dim = dim(wls_fit$b),
+    jerr = wls_fit$jerr,
+    call = this.call,
+    nulldev=nulldev,
+    nobs = nobs,
+    warm_fit = warm_fit
+  )
+
+  if (save.fit == FALSE) {
+    out$warm_fit <- NULL
+  }
+  class(out) <- c("classofit", "classo")
+  out
+
+}
+
+
+
+#' Get null deviance, starting mu and lambda max
+#'
+#' Return the null deviance, starting mu and lambda max values for
+#' initialization. For internal use only.
+#'
+#' This function is called by \code{classo.path} for null deviance,
+#' starting mu and lambda max values.
+#' It is also called by \code{classo.fit} when used without warmstart,
+#' but they only use the null deviance and starting mu values.
+#'
+#' When \code{x} is not sparse, it is expected to already by centered and scaled.
+#' When \code{x} is sparse, the function will get its attributes \code{xm} and
+#' \code{xs} for its centering and scaling factors.
+#'
+#' Note that whether \code{x} is centered & scaled or not,
+#' the values of \code{mu} and \code{nulldev} don't change.
+#' However, the value of \code{lambda_max} does change,
+#' and we need \code{xm} and \code{xs} to get the correct value.
+#'
+#' @param x Input matrix, of dimension \code{nobs x nvars}; each row is an
+#' observation vector.
+#' It should have attributes \code{xm} and \code{xs}, where \code{xm(j)} and
+#' \code{xs(j)} are the centering and scaling factors for variable j respsectively.
+#' It is assumed to be standardized.
+#' @param y Quantitative response variable.
+#' @param weights Observation weights.
+#' @param family To match the convention in \code{glmnet}, "gaussian" is assumed.
+#' (See \code{\link[stats:family]{family}} for details on family functions.)
+#' @param intercept Does the model we are fitting have an intercept term or not?
+get_start <- function(x, y, weights, family=gaussian,intercept) {
+
+  # x, # included
+  # y, # included
+  # weights, # included
+  # family, # included
+  # intercept, # included
+  # is.offset, # deleted
+  # offset, # deleted
+  # exclude, # deleted
+  # vp, # deleted
+  # alpha # deleted
+
+  # ------------------------------------------------ #
+  nobs <- nrow(x)
+  nvars <- ncol(x)
+
+  # compute mu and null deviance
+  # Note: for gaussian case, null deviance is sum of squares
+  if (intercept) {
+    mu <- rep(weighted.mean(y,weights), times = nobs)
+  } else {
+    mu <- rep(0, times = nobs)
+  }
+
+  # doubling for complex -> double real
+  y_star <- c(Re(y),Im(y))
+  mu_star <- c(Re(mu),Im(mu))
+  weights_star <- c(weights,weights)
+
+  # This need to be fixed:
+  nulldev <- dev_function(y_star, mu_star, weights_star, family)
+
+  # ------------------------------------------------ #
+  # compute lambda max
+  r <- y - mu
+  eta <- family$linkfun(mu)
+  v <- family$variance(mu)
+  m.e <- family$mu.eta(eta)
+  weights <- weights / sum(weights)
+  rv <- r / v * m.e * weights
+  # g <- abs(drop(t(rv) %*% x))
+  g <- abs(t(rv) %*% x)
+  lambda_max <- max(g)
+
+  list(nulldev = nulldev, mu = mu, lambda_max = lambda_max)
+}
+
+#' cxreg objective function value
+#'
+#' Returns the cxreg objective function value.
+#'
+#' @param y Quantitative response variable.
+#' @param mu Model's predictions for \code{y}.
+#' @param weights Observation weights.
+#' @param family A description of the error distribution and link function to be
+#' used in the model. This is the result of a call to a family function.
+#' @param lambda A single value for the \code{lambda} hyperparameter.
+#' @param alpha The elasticnet mixing parameter, with \eqn{0 \le \alpha \le 1}.
+#' @param coefficients The model's coefficients (excluding intercept).
+#' @param vp Penalty factors for each of the coefficients.
+obj_function <- function(y, mu, weights, family, lambda, coefficients) {
+  dev_function(y, mu, weights, family) / 2 + lambda * pen_function(coefficients)
+}
+
+#' classo penalty value
+#'
+#' Returns the classo penalty value.
+#'
+#' The penalty is defined as
+#' \deqn{\sum |\beta|.}
+#' Note the omission of the multiplicative \code{lambda} factor.
+#' @param coefficients The model's coefficients (excluding intercept).
+pen_function <- function(coefficients) {
+
+  leng <- length(coefficients)
+  zeros <- sum(coefficients==0)
+  if (leng == zeros){
+    0
+  }else{
+    RE <- Re(coefficients)
+    IM <- Im(coefficients)
+    sum(mapply(l=1:leng,function(l) sqrt(RE[l]^2 + IM[l]^2)))
+  }
+}
+
+#' classo deviance value
+#'
+#' Returns the elastic net deviance value.
+#'
+#' @param y Quantitative response variable.
+#' @param mu Model's predictions for \code{y}.
+#' @param weights Observation weights.
+#' @param family A description of the error distribution and link function to be
+#' used in the model. This is the result of a call to a family function.
+dev_function <- function(y, mu, weights, family) {
+
+  # doubling for complex -> double real
+  y_star <- c(Re(y),Im(y))
+  mu_star <- c(Re(mu),Im(mu))
+  weights_star <- c(weights,weights)
+
+  sum(family$dev.resids(y_star, mu_star, weights_star))
+}
+
+jerr.classofit <- function (n, maxit, k = NULL) {
+  if (n == 0) {
+    list(n = 0, fatal = FALSE, msg = "")
+
+  } else if (n > 0) {
+
+    # fatal error
+    fatal <- TRUE
+    msg <- ifelse(n < 7777,
+                  "Memory allocation error; contact package maintainer",
+                  "Unknown error")
+  } else {
+    # non-fatal error
+    fatal <- FALSE
+    msg <- paste("Convergence for ", k, "th lambda value not reached after maxit=",
+                 maxit, " iterations; solutions for larger lambdas returned",
+                 sep = "")
+
+  }
+  list(n = n, fatal = fatal, msg = msg)
+}
+
+#' Get predictions from a \code{classofit} fit object
+#'
+#' Gives fitted values, linear predictors, coefficients and number of non-zero
+#' coefficients from a fitted \code{classo} object.
+#'
+#' @param object Fitted "classofit" object.
+#' @param newx Matrix of new values for \code{x} at which predictions are to be
+#' made. Must be a matrix. This argument is not used for \code{type =
+#' c("coefficients","nonzero")}.
+#' @param s Value(s) of the penalty parameter lambda at which predictions are
+#' required. Default is the entire sequence used to create the model.
+#' @param type Type of prediction required. Type "link" gives the linear
+#' predictors (eta scale).
+#' @param exact This argument is relevant only when predictions are made at values
+#' of \code{s} (lambda) \emph{different} from those used in the fitting of the
+#' original model. If \code{exact=FALSE} (default), then the predict function
+#' uses linear interpolation to make predictions for values of \code{s} (lambda)
+#' that do not coincide with those used in the fitting algorithm. While this is
+#' often a good approximation, it can sometimes be a bit coarse. With
+#' \code{exact=TRUE}, these different values of \code{s} are merged (and sorted)
+#' with \code{object$lambda}, and the model is refit before predictions are made.
+#' In this case, it is required to supply the original data x= and y= as additional
+#' named arguments to predict() or coef(). The workhorse \code{predict.classo()}
+#' needs to update the model, and so needs the data used to create it. The same
+#' is true of weights, offset, penalty.factor, lower.limits, upper.limits if
+#' these were used in the original call. Failure to do so will result in an error.
+#'
+#' @return The object returned depends on type.
+#'
+#' @method predict classo
+#' @export
+predict.classofit <- function(object, newx, s = NULL,
+                              type = c("link", "response", "coefficients", "nonzero"),
+                              exact = FALSE) {
+  type = match.arg(type)
+  nfit <- NextMethod("predict")
+  if (type == "response") {
+    object$family$linkinv(nfit)
+  } else {
+    nfit
+  }
+}
+
+#' Helper function to get etas (linear predictions)
+#'
+#' Given x, coefficients and intercept, return linear predictions. Wrapper that
+#' works with both regular and sparse x. Only works for single set of coefficients
+#' and intercept.
+#'
+#' @param x Input matrix, of dimension \code{nobs x nvars}; each row is an
+#' observation vector. If it is a sparse matrix, it is assumed to be unstandardized.
+#' It should have attributes \code{xm} and \code{xs}, where \code{xm(j)} and
+#' \code{xs(j)} are the centering and scaling factors for variable j respsectively.
+#' If it is not a sparse matrix, it is assumed to be standardized.
+#' @param beta Feature coefficients.
+get_eta <- function(x, beta) {
+  # drop(x %*% beta)
+  x %*% beta
+}
+
+#' Helper function to compute weighted mean and standard deviation
+#'
+#' Helper function to compute weighted mean and standard deviation.
+#' Deals gracefully whether x is sparse matrix or not.
+#'
+#' @param x Observation matrix.
+#' @param weights Optional weight vector.
+#'
+#' @return A list with components.
+#' \item{mean}{vector of weighted means of columns of x}
+#' \item{sd}{vector of weighted standard deviations of columns of x}
+weighted_mean_sd <- function(x, weights=rep(1,nrow(x))){
+  weights <- weights/sum(weights)
+  # xm <- drop(t(weights)%*%x)
+  xm <- t(weights)%*%x
+  # xv <- drop(t(weights)%*%scale(x,xm,FALSE)^2)
+  xv <- t(weights)%*%scale(x,xm,FALSE)^2
+  xv[abs(xv) < 10*.Machine$double.eps] <- 0
+  # xv[xv < 10*.Machine$double.eps] <- 0
+  list(mean = xm, sd = sqrt(xv))
+}
+
+
+
+

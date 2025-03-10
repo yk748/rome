@@ -1,13 +1,13 @@
 Package: rome
-Title: rome
+Title: penalized RObust-MEstimators
 Version: 0.1.0
-Authors@R: c(
-    person("Younghoon", "Kim", , "yk748@cornell.edu", role = c("aut", "cre"),
-           comment = c(ORCID = "0009-0007-0117-5530")),
-    person("Sumanta", "Basu", role = "ctb")
-  )
+Authors@R: 
+    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
+Author: Younghoon Kim <yk748@cornell.edu> [aut], Sumanta Basu
+    <sumbose@cornell.edu> [ctb]
 Maintainer: Younghoon Kim <yk748@cornell.edu>
-Description: R package for penalized robust M-estimators
+Description: Exact coordinate descent algorithm for regularized
+    (Lasso-penalty) robust M-estimators.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
