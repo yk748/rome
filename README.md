@@ -1,8 +1,7 @@
 # rome(RObust M-Estimator)
 
 We provide efficient procedures for fitting the robust M-estimators with Lasso penalty. The idea is to bring the
-exact coordinate descent algorithm ([2010](#ref-glmnet)) into complex
-analog, by introducing a unique isomorphism.
+exact coordinate descent algorithm ([2010](#ref-glmnet)) into robust loss functions, such as Huber loss function.
 
 Currently, the beta version (0.1.0) is released, and the version
 provides the basic functions, including fit, cross-validation, and other
