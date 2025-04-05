@@ -1,18 +1,24 @@
+Type: penalized robust M-estimator
 Package: rome
-Title: penalized RObust-MEstimators
+Title: Exact Coordinate Descent for Penalized Robust Regression
 Version: 0.1.0
-Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Author: Younghoon Kim <yk748@cornell.edu> [aut], Sumanta Basu
-    <sumbose@cornell.edu> [ctb]
-Maintainer: Younghoon Kim <yk748@cornell.edu>
-Description: Exact coordinate descent algorithm for regularized
-    (Lasso-penalty) robust M-estimators.
-License: MIT + file LICENSE
-Encoding: UTF-8
-Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
+Authors@R: c(
+    person("Younghoon", "Kim", , "yk748@cornell.edu", role = c("aut", "cre")),
+    person("Po-Ling", "Loh", role = "aut"),
+    person("Sumanta", "Basu", role = "aut")
+  )
+Description: Performs exact coordinate descent for penalized robust (e.g.,
+    Huber loss) regression
+License: GPL-3
+Depends: 
+    R (>= 4.0.0)
+Imports: 
+    mvtnorm,
+    stats,
+    utils
 LinkingTo: 
     Rcpp
-Imports: 
-    Rcpp
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2

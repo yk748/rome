@@ -8,9 +8,15 @@ cv_rome(
   y,
   x,
   weights = NULL,
-  type.measure = c("default"),
   delta = NULL,
-  n_folds = 10
+  lambda = NULL,
+  type.measure = c("default"),
+  n_folds = 10,
+  preprocess = c("none"),
+  centering = FALSE,
+  max.iter = 100,
+  tolerance = 1e-06,
+  intercept = FALSE
 )
 }
 \arguments{
@@ -22,6 +28,22 @@ cv_rome(
 proportion matrices. Default is 1 for each observation}
 
 \item{delta}{threshold for Huber loss function. The default is 1.5.}
+
+\item{lambda}{a sequence of \code{lambda}. It can be provided by users. The default is \code{NULL}.}
+
+\item{type.measure}{loss to use for cross-validation. Currently "default" is only availability. This corresponds to type.measure="deviance".}
+
+\item{n_folds}{number of folds - default is 10.}
+
+\item{preprocess}{a logical flag whether the data should be preprocessed. Currently, only \code{none} (no preprocessing) is provided.}
+
+\item{centering}{a logical flag whether the data should be centered. If so, the data is shifted by their mean levels. The default is \code{FALSE}.}
+
+\item{max.iter}{a maximum iteration for each update of a variable at a fixed \code{lambda}. The default is 100.}
+
+\item{intercept}{a logical flag whether the intercept is added. If so, the dimension of variable increases by 1. The default is \code{FALSE}.}
+
+\item{tol}{tolerance for convergence, used for stopping criteria. The each update of a variable is terminated when a ell2 norm for difference between two solutions of consecutive iteration is less than tolerance. The default is 1e-6.}
 }
 \description{
 Does k-fold cross-validation for glmnet, produces a plot, and returns a
@@ -29,7 +51,7 @@ value for \code{lambda}
 }
 \references{
 Kim, Y. Loh, PL. S. Basu (2025)
-\emph{??, ??, Vol. ??(??), ??-??},
+\emph{Exact Coordinate Descent for High-Dimensional Regularized Robust M-Estimators, ??, Vol. ??(??), ??-??},
 \doi{??}.\cr
 }
 \author{
