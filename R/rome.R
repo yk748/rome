@@ -18,13 +18,13 @@
 #' @author Younghoon Kim \cr Maintainer: Younghoon Kim
 #' \email{yk748@cornell.edu}
 #' @references Kim, Y. Loh, PL. S. Basu (2025)
-#' \emph{??, ??, Vol. ??(??), ??-??},
+#' \emph{Exact Coordinate Descent for High-Dimensional Regularized Robust M-Estimators, ??, Vol. ??(??), ??-??},
 #' \doi{??}.\cr
 #' @keywords models regression
 #' @import utils
 #' @import stats
-#' @useDynLib rome, .registration = TRUE, .fixes = "C_"
-#' @useDynLib rome ecd_huber
+#' @import mvtnorm
+#' @useDynLib rome ecd_huber_
 #' @export rome
 #' 
 #' @examples
@@ -35,12 +35,15 @@ rome <- function(x, y, method = c("huber"), weights=NULL,
                         centering = FALSE,
                         max.iter = 100, tolerance = 1e-6, 
                         intercept = FALSE){
+  # ------------------------------------------- #
+  # Needs to be deleted:
+  # dyn.load("D:/High-dimensional time series/Exact coordinate descent/rome/src/rome.dll")
   
   # ------------------------------------------- #
   # Input check:
   method <- match.arg(method)
   preprocess <- match.arg(preprocess)
-  screen <- match.arg(screen)
+  # screen <- match.arg(screen)
   if (missing(lambda) && nlambda < 2) {
     stop("nlambda (number of lambdas) should be at least 2")
   }
@@ -102,7 +105,7 @@ rome <- function(x, y, method = c("huber"), weights=NULL,
   # ------------------------------------------- #
   # Fitting
   if (method == "huber") {
-    fit <- .C("ecd_huber", 
+    fit <- .C(ecd_huber_, 
               double(p*nlambda), 
               integer(nlambda), 
               as.double(lambda), 
@@ -132,7 +135,7 @@ rome <- function(x, y, method = c("huber"), weights=NULL,
   
   # ------------------------------------------- #
   # Names
-  vnames <- colnames(X)
+  vnames <- colnames(x)
   if (intercept == TRUE){
     if (is.null(vnames)) {
       vnames <- paste0("V",seq(p-1))

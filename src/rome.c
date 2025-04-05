@@ -172,7 +172,7 @@ void derivative_huber(double* u, double* v, double delta, int n) {
 }
 
 // Exact Coordinate Descent (ECD) -------------------------------------------
-static void ecd_huber(double* beta, 
+void ecd_huber_(double* beta, 
                 int* iter, 
                 double* lambda, 
                 double* x, 
@@ -362,7 +362,7 @@ static void ecd_huber(double* beta,
 
 static const R_CMethodDef cMethods[] = {
     // name        pointer         Num args
-    {"ecd_huber", (DL_FUNC)&ecd_huber, 15},
+    {"ecd_huber_", (DL_FUNC)&ecd_huber_, 15},
     {NULL, NULL, 0}   // Placeholder to indicate last one.
 };
 

@@ -1,4 +1,32 @@
-cv_rome <- function(y,x,weights=NULL,delta=NULL,n_folds=10){
+#' Cross-validation a penalized robust regression
+#'
+#' Does k-fold cross-validation for glmnet, produces a plot, and returns a
+#' value for \code{lambda}
+#' 
+#' @param y response variable.
+#' @param x input matrix, of dimension nobs x nvars; 
+#' @param weights observation weights. Can be total counts if responses are
+#' proportion matrices. Default is 1 for each observation
+#' @param delta threshold for Huber loss function. The default is 1.5. 
+#' @lambda a sequence of \code{lambda}. It can be provided by users.
+#' @type.measure 
+#' @n_folds
+#' @preprocess a logical flag whether the data should be preprocessed. Currently, only \code{none} (no preprocessing) is provided.
+#' @centering a logical flag whether the data should be centered. If so, the data is shifted by their mean levels. The default is \code{FALSE}.
+#' @max.iter a maximum iteration for each update of a variable at a fixed \code{lambda}. The default is 100. 
+#' @tol tolerance for convergence, used for stopping criteria. The each update of a variable is terminated when a ell2 norm for difference between two solutions of consecutive iteration is less than tolerance. The default is 1e-6.
+#' @intercept a logical flag whether the intercept is added. If so, the dimension of variable increases by 1. The default is \code{FALSE}.
+#' @author Younghoon Kim \cr Maintainer: Younghoon Kim
+#' \email{yk748@cornell.edu}
+#' @references Kim, Y. Loh, PL. S. Basu (2025)
+#' \emph{??, ??, Vol. ??(??), ??-??},
+#' \doi{??}.\cr
+#' @keywords models regression
+#' @export cv_rome
+#' 
+#' @examples
+
+cv_rome <- function(y,x,weights=NULL,type.measure=c("default"),delta=NULL,n_folds=10){
   
   fold_id <- ceiling(sample(1:n)/n*n_folds)
   
