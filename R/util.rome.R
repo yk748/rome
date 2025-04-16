@@ -7,7 +7,17 @@ error.bars <- function(x,upper,lower,width=0.02,...){
   range(upper, lower)
 }
 
-plot_cv <- function(fit,...){
+#' plot the cross-validation curve produced by cv.rome
+#'
+#' A plot is produced, and nothing is returned.
+#'
+#' @aliases plot.cv.rome
+#' @param x fitted \code{"cv.rome"} object
+#' @seealso \code{rome} and \code{cv.rome}.
+#'
+#' @method plot cv.rome
+#' @export
+plot.cv.rome <- function(fit,...){
   l <- fit$lambda
   l <- -log(l)
   xlab <- expression(-log(lambda))
@@ -35,11 +45,18 @@ plot_cv <- function(fit,...){
   abline(v=log(fit$lambda_min),lty=3)
   abline(v=log(fit$lambda_1se),lty=3)
   
-  nv <- predict_ecd(fit$fit, lambda = fit$lambda, type = "nvars")
+  nv <- predict.rome(fit$fit, lambda = fit$lambda, type = "nonzero")
   axis(3, at=l, labels=nv, tick=FALSE, line=-0.5)
 }
 
-coef_rome <- function(object, lambda, exact = FALSE, ...) {
+
+#' Extract coefficients from a rome object
+#'
+#' @method coef rome
+#' @rdname predict.rome
+#' @export
+#' @export coef.rome
+coef.rome <- function(object, lambda, exact = FALSE, ...) {
   if (missing(lambda)) {
     beta <- object$beta
   } else if (exact) {
@@ -65,4 +82,66 @@ coef_rome <- function(object, lambda, exact = FALSE, ...) {
     }
   }
   return(beta)
+}
+
+
+lambda.interp <- function(lambda,s){
+  
+  if(length(lambda)==1){# degenerate case of only one lambda
+    nums <- length(s)
+    left <- rep(1,nums)
+    right <- left
+    sfrac <- rep(1,nums)
+  }
+  else{
+    k <- length(lambda)
+    sfrac <- (lambda[1]-s)/(lambda[1] - lambda[k])
+    lambda <- (lambda[1] - lambda)/(lambda[1] - lambda[k])
+    sfrac[sfrac < min(lambda)] <- min(lambda)
+    sfrac[sfrac > max(lambda)] <- max(lambda)
+    coord <- approx(lambda, seq(lambda), sfrac)$y
+    left <- floor(coord)
+    right <- ceiling(coord)
+    sfrac <- (sfrac-lambda[right])/(lambda[left] - lambda[right])
+    sfrac[left==right] <- 1
+    sfrac[abs(lambda[left]-lambda[right])<.Machine$double.eps] <- 1
+    
+  }
+  list(left=left,right=right,frac=sfrac)
+}
+
+
+check_dots <- function(object, ..., 
+                       need = c("x", "y", "weights", "offset", "penalty.factor",
+                                "lower.limits", "upper.limits"), 
+                       error_start = "used coef.rome() or predict.rome() with `exact=TRUE`",
+                       error_end = " in order to safely rerun rome",
+                       prefix = NULL) {
+  if (is.null(need)) {
+    return(invisible())
+  }
+  
+  # extract the function options we need from the object's call
+  thiscall <- object$call
+  ncall <- names(thiscall)[-1]
+  w <- match(ncall, need, 0)
+  need <- need[w]
+  if (length(need) == 0) {
+    return(invisible())
+  }
+  
+  # check that ... indeed has those function options
+  if (!is.null(prefix)) {
+    need <- paste0(prefix, need)
+  }
+  nargs <- names(list(...))
+  w <- match(need, nargs, 0) > 0
+  if(!all(w)) {
+    margs <- need[!w]
+    stop(paste(error_start, 
+               "so must in addition supply original argument(s) ",
+               paste(margs,collapse=" and "), 
+               error_end), call.=FALSE)
+  }
+  invisible()
 }

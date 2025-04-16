@@ -1,6 +1,6 @@
 #' Cross-validation a penalized robust regression
 #'
-#' Does k-fold cross-validation for glmnet, produces a plot, and returns a
+#' Does k-fold cross-validation for rome, produces a plot, and returns a
 #' value for \code{lambda}
 #' 
 #' @param y response variable.
@@ -9,8 +9,8 @@
 #' proportion matrices. Default is 1 for each observation
 #' @param delta threshold for Huber loss function. The default is 1.5. 
 #' @param lambda a sequence of \code{lambda}. It can be provided by users. The default is \code{NULL}.
-#' @param type.measure loss to use for cross-validation. Currently "default" is only availability. This corresponds to type.measure="deviance".
-#' @param n_folds number of folds - default is 10.
+#' @param nfolds number of folds - default is 10.
+#' @param foldid an optional vector of values between 1 and \code{nfolds} identifying what fold each observation is in. If supplied, \code{nfolds} can be missing.
 #' @param preprocess a logical flag whether the data should be preprocessed. Currently, only \code{none} (no preprocessing) is provided.
 #' @param centering a logical flag whether the data should be centered. If so, the data is shifted by their mean levels. The default is \code{FALSE}.
 #' @param max.iter a maximum iteration for each update of a variable at a fixed \code{lambda}. The default is 100. 
@@ -22,31 +22,36 @@
 #' \emph{Exact Coordinate Descent for High-Dimensional Regularized Robust M-Estimators, ??, Vol. ??(??), ??-??},
 #' \doi{??}.\cr
 #' @keywords models regression
-#' @export cv_rome
+#' @export cv.rome
 #' 
 
-cv_rome <- function(y,x,weights=NULL,delta=NULL,lambda=NULL,
-                    type.measure=c("default"),n_folds=10,
+cv.rome <- function(x,y,weights=NULL,delta=NULL,lambda=NULL,
+                    nfolds=10,foldid=NULL,
                     preprocess = c("none"), 
                     centering = FALSE,
                     max.iter = 100, tolerance = 1e-6, 
                     intercept = FALSE){
   
-  type.measure = match.arg(type.measure)
+
   if (!is.null(lambda) && length(lambda) < 2){
     stop("Need more than one value of lambda for cv_rome")
   }
   
-  fold_id <- ceiling(sample(1:n)/n*n_folds)
+  if (is.null(foldid)){
+    foldid <- ceiling(sample(1:n)/n*nfolds)
+  } else {
+    nfolds <- max(foldid)
+  }
   
-  fit <- rome(x, y, weights=weigths, delta=delta,...)
+  fit <- rome(x, y, weights=weights, delta=delta, lambda=lambda, 
+              max.iter=max.iter, tolerance=tolerance)
   
   n <- length(y)
   E <- matrix(NA, nrow = n, ncol = length(fit$lambda))
-  for (i in 1:n_folds) {
+  for (i in 1:nfolds) {
     cat("CV fold #",i,"begins\n")
-    fit_i_fold <- cv_ftn(i,y,x,fold_id,delta=fit$delta)
-    E[fold_id == i, 1:fit_i_fold$nl] <- fit_i_fold$pe
+    fit_i_fold <- cv.ftn(i,x,y,foldid,delta=fit$delta)
+    E[foldid == i, 1:fit_i_fold$nl] <- fit_i_fold$pe
   }
   
   idx <- which(apply(is.finite(E), 2, all))
@@ -63,15 +68,17 @@ cv_rome <- function(y,x,weights=NULL,delta=NULL,lambda=NULL,
 }
 
 
-cv_ftn <- function(i,y,x,fold_id,delta) {
-  x_tr <- x[fold_id != i,,drop = FALSE]
-  y_tr <- y[fold_id != i]
-  x_ts <- x[fold_id == i,,drop = FALSE]
-  y_ts <- y[fold_id == i]
+cv.ftn <- function(i,x,y,foldid,delta) {
+  x_tr <- x[foldid != i,,drop = FALSE]
+  y_tr <- y[foldid != i]
+  x_ts <- x[foldid == i,,drop = FALSE]
+  y_ts <- y[foldid == i]
   
-  fit_i <- rome(x=x_tr,y=y_tr)
+  fit_i <- rome(x=x_tr,y=y_tr,delta=delta)
   
-  y_hat <- matrix(predict_rome(fit_i,X=x_ts,type="response"),length(y_ts))
+  y_hat <- matrix(predict.rome(fit_i,newx=x_ts,type="response"),length(y_ts))
+  
+  # Currently, only deviance can be provided
   r_hat <- y_ts - y_hat
   val <- array(NA,dim=dim(r_hat))
   for (r in 1:dim(r_hat)[1]){

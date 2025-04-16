@@ -122,9 +122,10 @@ rome <- function(x, y, method = c("huber"), weights=NULL,
               as.integer(user) )
   } 
   
-  beta <- matrix(fit[[1]], nrow=p)
+  beta <- matrix(fit[[1]], nrow=p, ncol=nlambda)
   iter <- fit[[2]]
   lambda <- fit[[3]]
+  delta <- fit[[7]]
   
   # ------------------------------------------- #
   # Get back intercept, if exists
@@ -154,7 +155,9 @@ rome <- function(x, y, method = c("huber"), weights=NULL,
                  iter = iter,
                  lambda = lambda,
                  delta = delta,
-                 method = method),
+                 method = method,
+                 dim = dim(XX),
+                 intercept = ifelse(intcpt,TRUE,FALSE)),
             class = "rome")
   
 }
