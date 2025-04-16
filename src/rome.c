@@ -73,11 +73,14 @@ void huber_fit(double* out, double* rj, double* wxj, double* w2x2j, double* thre
     double sol = 0.0;
     for (int i = 0; i < (2 * n - 1); i++) {
         S = S + pairs[i].cumulative_sum * (pairs[i + 1].kinks - pairs[i].kinks);
-        if (pairs[i + 1].kinks >= 0) {
+        if (pairs[i + 1].kinks > 0) {
             pairs[i + 1].value = S + lambda_fixed;
         }
-        else {
+        else if (pairs[i + 1].kinks < 0) {
             pairs[i + 1].value = S - lambda_fixed;
+        }
+        else {
+            pairs[i + 1].value = S;
         }
 
         if (i > 1) {
@@ -97,7 +100,7 @@ void partial_residuals(double* rj, double* y, double* x, double* beta_new, int n
         double sum = 0.0;
         for (int k = 0; k < p; k++) {
             if (k != j) {
-                sum += x[k* p + i] * beta_new[k];
+                sum += x[k* n + i] * beta_new[k];
             }
         }
         rj[i] = (y[i] - sum) / x[j * n + i];
@@ -190,14 +193,13 @@ void ecd_huber_(double* beta,
 {
     // Declarations -------------------------------------------
     double tol = tol_[0]; 
-    double gap_tol = 1e-6;
+    double gap_tol = tol * 100;
     double delta = delta_[0];
     double lambda_min = lambda_min_[0];
     int nlam = nlam_[0]; 
     int n = n_[0]; 
     int p = p_[0]; 
     int ppflag = ppflag_[0]; 
-    // int scrflag = scrflag_[0]; 
     int max_iter = max_iter_[0]; 
     int user = user_[0];
 
@@ -356,7 +358,6 @@ void ecd_huber_(double* beta,
     free(xj);
     free(wxj);
     free(w2x2j);
-    //R_Free(include);
 }
 
 
