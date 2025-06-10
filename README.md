@@ -10,14 +10,10 @@ functions for illustration. Please email Younghoon Kim
 
 ## References
 
-<div id="refs" class="references">
-
-<div id="ref-glmnet">
+<div id="ref-rome">
 
 Kim, Younghoon, Basu, Sumanta, and Loh, Po-Ling. 2025.
 “Exact Coordinate Descent for High-Dimensional Regularized Robust M-Estimators.” *In progress*.
-
-<div id="refs" class="references">
 
 <div id="ref-glmnet">
 
