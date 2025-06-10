@@ -13,5 +13,5 @@
 A plot is produced, and nothing is returned.
 }
 \seealso{
-\code{rome} and \code{cv.rome}.
+\code{rome_screen} and \code{cv.rome}.
 }

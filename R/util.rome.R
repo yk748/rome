@@ -13,7 +13,7 @@ error.bars <- function(x,upper,lower,width=0.02,...){
 #'
 #' @aliases plot.cv.rome
 #' @param x fitted \code{"cv.rome"} object
-#' @seealso \code{rome} and \code{cv.rome}.
+#' @seealso \code{rome_screen} and \code{cv.rome}.
 #'
 #' @method plot cv.rome
 #' @export

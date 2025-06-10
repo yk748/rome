@@ -1,7 +1,7 @@
 Type: penalized robust M-estimator
 Package: rome
 Title: Exact Coordinate Descent for Penalized Robust Regression
-Version: 0.5.0
+Version: 0.8.0
 Authors@R: c(
     person("Younghoon", "Kim", , "yk748@cornell.edu", role = c("aut", "cre")),
     person("Po-Ling", "Loh", role = "aut"),

@@ -45,7 +45,7 @@ Similar to other predict methods, this functions predicts fitted values,
 coefficients and number of non-zero coefficients from a fitted \code{"rome"} object.
 }
 \seealso{
-\code{rome} and \code{cv.rome}.
+\code{rome_adaptive} and \code{cv.rome}.
 }
 \keyword{models}
 \keyword{regression}

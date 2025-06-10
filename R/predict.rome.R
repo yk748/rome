@@ -22,7 +22,7 @@
 #' are made. In this case, it is required to supply the original data \code{x=}
 #' and \code{y=} as additional named arguments to \code{predict()} or
 #' \code{coef()}. 
-#' @seealso \code{rome} and \code{cv.rome}.
+#' @seealso \code{rome_adaptive} and \code{cv.rome}.
 #' @keywords models regression
 #' @method predict rome
 #' @export
