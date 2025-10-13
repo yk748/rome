@@ -3,7 +3,7 @@
 We provide efficient procedures for fitting the robust M-estimators with Lasso penalty. The idea is to bring the
 exact coordinate descent algorithm ([2010](#ref-glmnet)) into robust loss functions, such as Huber loss function.
 
-Currently, the beta version (0.5.0) is released, and the version
+Currently, the beta version (0.8.0) is released, and the version
 provides the basic functions, including fit, cross-validation, and other
 functions for illustration. Please email Younghoon Kim
 <yk748@cornell.edu> if any bugs/errors have been discovered.
