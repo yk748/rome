@@ -3,13 +3,13 @@
 \name{predict.rome}
 \alias{predict.rome}
 \alias{coef.rome}
-\title{make predictions from a "rome" object.}
+\title{Make predictions from a "rome" object.}
 \usage{
 \method{predict}{rome}(
   object,
-  newx,
-  s = NULL,
-  type = c("response", "coefficients", "nonzero"),
+  X,
+  lambda,
+  type = c("response", "coefficients", "nvars"),
   exact = FALSE,
   ...
 )
@@ -19,9 +19,9 @@
 \arguments{
 \item{object}{Fitted \code{"rome"} model object.}
 
-\item{s}{Value(s) of the penalty parameter \code{lambda} at which
-predictions are required. Default is the entire sequence used to create the
-model.}
+\item{X}{Matrix of new values for \code{x} at which predictions are to be
+made. Must be a matrix; can be sparse as in \code{Matrix} package. This
+argument is not used for \code{type=c("coefficients","nonzero")}}
 
 \item{exact}{This argument is relevant only when predictions are made at
 values of \code{s} (lambda) \emph{different} from those used in the fitting
@@ -36,16 +36,16 @@ are made. In this case, it is required to supply the original data \code{x=}
 and \code{y=} as additional named arguments to \code{predict()} or
 \code{coef()}.}
 
-\item{X}{Matrix of new values for \code{x} at which predictions are to be
-made. Must be a matrix; can be sparse as in \code{Matrix} package. This
-argument is not used for \code{type=c("coefficients","nonzero")}}
+\item{s}{Value(s) of the penalty parameter \code{lambda} at which
+predictions are required. Default is the entire sequence used to create the
+model.}
 }
 \description{
 Similar to other predict methods, this functions predicts fitted values,
 coefficients and number of non-zero coefficients from a fitted \code{"rome"} object.
 }
 \seealso{
-\code{rome_adaptive} and \code{cv.rome}.
+\code{rome.adaptive} and \code{cv.rome}.
 }
 \keyword{models}
 \keyword{regression}

@@ -192,7 +192,7 @@ void ecd_huber_adaptive_active_(double* beta, int* iter, double* lambda, int* sa
                         }
                         beta_old[j] = beta[lp + j];
 
-                        // Update max_update -------------------------------------------
+                        // Update max_update & change_sum -------------------------------------------
                         sum_sq = 0.0;
                         for (i = 0; i < n; i++) {
                             sum_sq += w2x2j[i];
@@ -708,11 +708,164 @@ void ecd_huber_noscreen_(double* beta, int* iter, double* lambda, double* x, dou
     R_Free(beta_old);
 }
 
+// Exact Coordinate Descent (ECD) for adaptive penalized Huber regression without screening and without KKT conditions (for test purpose) -------------------------------------------
+void ecd_huber_noscreen_noKKT_(double* beta, int* iter, double* lambda, double* x, double* y, double* w, double* delta_, double* eps_, double* lambda_min_,
+    int* nlam_, int* n_, int* p_, int* ppflag_, int* max_iter_, int* user_, int* trace_)
+{
+    // Declarations from R -------------------------------------------
+    double eps = eps_[0];
+    double delta = delta_[0];
+    double lambda_min = lambda_min_[0];
+    int nlam = nlam_[0];
+    int n = n_[0];
+    int p = p_[0];
+    int ppflag = ppflag_[0];
+    int max_iter = max_iter_[0];
+    int user = user_[0];
+    int trace = trace_[0];
+
+    // Declarations from C -------------------------------------------
+    int i, j, l, ll, jn, lp;
+    double N = (double)n;
+    double tol, null_dev, grad_sum, lstep, lambda_fixed, change_sum, loss_sum;
+
+    double* change = R_Calloc(p, double); // beta - beta_old
+    double* loss = R_Calloc(max_iter, double);
+    double* v = R_Calloc(n, double); // v = y -x beta
+    double* uj = R_Calloc(n, double); // u = v + x_j beta_j
+    double* wx = R_Calloc(n * p, double); // wx
+    double* wxj = R_Calloc(n, double); // wx_j
+    double* w2x2 = R_Calloc(n * p, double); // w^2x^2
+    double* w2x2j = R_Calloc(n, double);// w^2x^2_j
+    double* threshold = R_Calloc(n * p, double); // delta/|wx|
+    double* threshold_j = R_Calloc(n, double); // delta/|wx_j|
+
+    double* rj = R_Calloc(n, double);
+
+    double* beta_old = R_Calloc(p, double);
+
+    // Preprocessing -------------------------------------------
+    // This needs to be added.
+    if (ppflag == 0) {
+        simple_process_adaptive(v, wx, w2x2, threshold, y, x, w, n, p, delta);
+    }
+
+    // Compute null deviance
+    null_dev = 0.0;
+    for (i = 0; i < n; i++) {
+        null_dev += huber_loss(y[i], delta);
+    }
+    tol = eps * null_dev;
+
+    // Set up lambda -------------------------------------------
+    if (user == 0) {
+        double max_lambda = 0.0;
+        for (j = 0; j < p; j++) {
+            grad_sum = 0.0;
+            jn = j * n;
+            for (i = 0; i < n; i++) {
+                grad_sum += x[i + jn] * huber_grad(y[i], delta);
+            }
+            double abs_val = fabs(grad_sum);
+            if (abs_val > max_lambda) {
+                max_lambda = abs_val;
+            }
+        }
+        lambda[0] = max_lambda / N;
+
+        if (lambda_min == 0.0) {
+            lambda_min = 0.001;
+        }
+        lstep = log(lambda_min) / ((double)nlam - 1.0);
+        for (l = 1; l < nlam; l++) {
+            lambda[l] = lambda[l - 1] * exp(lstep);
+        }
+    }
+
+
+    // Solution path -------------------------------------------
+    for (l = 0; l < nlam; l++) {
+
+        lp = l * p;
+        lambda_fixed = lambda[l];
+        if (trace) {
+            Rprintf("Lambda %d\n", l + 1);
+        }
+
+        // For each fixed lambda, solve the problem -------------------------------------------
+        for (ll = 0; ll < max_iter; ll++) {
+            for (j = 0; j < p; j++) {
+                jn = j * n;
+                for (i = 0;i < n;i++) {
+                    uj[i] = v[i] + x[i + jn] * beta_old[j];
+                    wxj[i] = wx[i + jn];
+                }
+
+                // Get partial residuals & update -------------------------------------------
+                for (i = 0;i < n;i++) {
+                    rj[i] = w[i] * uj[i] / x[i + jn];
+                    threshold_j[i] = threshold[i + jn];
+                    w2x2j[i] = w2x2[i + jn];
+                }
+                double out;
+                huber_fit(&out, rj, wxj, w2x2j, threshold_j, lambda_fixed, delta, n, N);
+                beta[lp + j] = out;
+
+                // Update residuals -------------------------------------------
+                change[j] = beta[lp + j] - beta_old[j];
+                for (i = 0;i < n;i++) {
+                    v[i] += -x[i + jn] * change[j];
+                }
+                beta_old[j] = beta[lp + j];
+            }
+            // Convergence check -------------------------------------------
+            change_sum = 0.0;
+            for (j = 0;j < p;j++) {
+                change_sum += change[j] * change[j];
+            }
+            if (change_sum < eps || ll == max_iter) {
+                iter[l] = ll;
+                break;
+            }
+            else {
+                loss_sum = 0.0;
+                for (i = 0; i < n; i++) {
+                    loss_sum += w[i] * huber_loss(v[i], delta);
+                }
+                loss[ll] = loss_sum / N;
+                if (ll >= 4) {
+                    if (fabs(loss[ll] - loss[(ll - 2)]) < tol || fabs(loss[ll] - loss[(ll - 1)]) < tol) {
+                        iter[l] = ll;
+                        break;
+                    }
+                }
+            }
+        }// iteration ends
+        if (trace) {
+            Rprintf("# iterations = %d\n", ll);
+        }
+    }// fixed lambda cycle ends
+
+    // Free allocated memories -------------------------------------------
+    R_Free(loss);
+    R_Free(v);
+    R_Free(uj);
+    R_Free(wx);
+    R_Free(wxj);
+    R_Free(w2x2);
+    R_Free(w2x2j);
+    R_Free(threshold);
+    R_Free(threshold_j);
+    R_Free(rj);
+    R_Free(beta_old);
+}
+
 static const R_CMethodDef cMethods[] = {
     // name        pointer         Num args
     {"ecd_huber_adaptive_active_", (DL_FUNC)&ecd_huber_adaptive_active_, 20},
     {"ecd_huber_active_", (DL_FUNC)&ecd_huber_active_, 19},
     {"ecd_huber_noscreen_", (DL_FUNC)&ecd_huber_noscreen_, 16},
+    {"ecd_huber_noscreen_noKKT_", (DL_FUNC)&ecd_huber_noscreen_noKKT_, 16},
     {NULL, NULL, 0}   // Placeholder to indicate last one.
 };
 

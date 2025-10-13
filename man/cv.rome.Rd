@@ -7,16 +7,12 @@
 cv.rome(
   x,
   y,
-  weights = NULL,
-  delta = NULL,
-  lambda = NULL,
+  FUN = c("rome.adaptive"),
+  ncores = 1,
   nfolds = 10,
   foldid = NULL,
-  preprocess = c("none"),
-  centering = FALSE,
-  max.iter = 100,
-  tolerance = 1e-06,
-  intercept = FALSE
+  type.measure = c("deviance", "mse", "mae"),
+  ...
 )
 }
 \arguments{
@@ -24,16 +20,22 @@ cv.rome(
 
 \item{y}{response variable.}
 
+\item{nfolds}{number of folds. Default is 10.}
+
+\item{foldid}{an optional vector of values between 1 and \code{nfolds} identifying what fold each observation is in. If supplied, \code{nfolds} can be missing.}
+
+\item{adapt}{a logical flag whether the adaptive (weighting) scheme is used. Default is \code{FALSE}.}
+
 \item{weights}{observation weights. Can be total counts if responses are
 proportion matrices. Default is 1 for each observation}
 
-\item{delta}{threshold for Huber loss function. The default is 1.5.}
+\item{delta}{threshold for Huber loss function. The default is 0.5.}
 
-\item{lambda}{a sequence of \code{lambda}. It can be provided by users. The default is \code{NULL}.}
+\item{nlambda}{Length of a sequence of \code{lambda}. The default length is 100.}
 
-\item{nfolds}{number of folds - default is 10.}
+\item{lambda.min}{A ratio for minimum \code{lambda} from its maximum value. The default is 0.05.}
 
-\item{foldid}{an optional vector of values between 1 and \code{nfolds} identifying what fold each observation is in. If supplied, \code{nfolds} can be missing.}
+\item{lambda}{a sequence of \code{lambda}. It can be provided by users.}
 
 \item{preprocess}{a logical flag whether the data should be preprocessed. Currently, only \code{none} (no preprocessing) is provided.}
 
@@ -41,9 +43,16 @@ proportion matrices. Default is 1 for each observation}
 
 \item{max.iter}{a maximum iteration for each update of a variable at a fixed \code{lambda}. The default is 100.}
 
+\item{eps}{tolerance for convergence, used for stopping criteria. If the screen rules are used, it will be used for scaling the null deviance. If no screen rule is used, each update of a variable is terminated when a ell2 norm for difference between two solutions of consecutive iteration is less than tolerance. The default is 1e-4.}
+
 \item{intercept}{a logical flag whether the intercept is added. If so, the dimension of variable increases by 1. The default is \code{FALSE}.}
 
-\item{tol}{tolerance for convergence, used for stopping criteria. The each update of a variable is terminated when a ell2 norm for difference between two solutions of consecutive iteration is less than tolerance. The default is 1e-6.}
+\item{screen}{a logical flag whether the adaptive strong screen rule, strong screen rule, or no screen rule (\code{none}) is applied.}
+
+\item{dfmax}{Upper bound for the number of nonzero coefficients. The algorithm exits and
+returns a partial path if \code{dfmax} is reached. Useful for very large dimensions.}
+
+\item{trace}{Logical flag to ask the message for each progress. Default is \code{FALSE}.}
 }
 \description{
 Does k-fold cross-validation for rome, produces a plot, and returns a
@@ -51,8 +60,7 @@ value for \code{lambda}
 }
 \references{
 Kim, Y. Loh, PL. S. Basu (2025)
-\emph{Exact Coordinate Descent for High-Dimensional Regularized Robust M-Estimators, ??, Vol. ??(??), ??-??},
-\doi{??}.\cr
+\emph{Exact Coordinate Descent for High-Dimensional Regularized Huber Regression, Preprint}
 }
 \author{
 Younghoon Kim \cr Maintainer: Younghoon Kim

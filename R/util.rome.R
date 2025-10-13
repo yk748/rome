@@ -1,12 +1,3 @@
-error.bars <- function(x,upper,lower,width=0.02,...){
-  xlim <- range(x)
-  barw <- diff(xlim) * width
-  segments(x, upper, x, lower, ...)
-  segments(x - barw, upper, x + barw, upper, ...)
-  segments(x - barw, lower, x + barw, lower, ...)
-  range(upper, lower)
-}
-
 #' plot the cross-validation curve produced by cv.rome
 #'
 #' A plot is produced, and nothing is returned.
@@ -17,17 +8,18 @@ error.bars <- function(x,upper,lower,width=0.02,...){
 #'
 #' @method plot cv.rome
 #' @export
-plot.cv.rome <- function(fit,...){
+plot.cv.rome <- function(fit,nvars=TRUE,...){
   l <- fit$lambda
-  l <- -log(l)
-  xlab <- expression(-log(lambda))
+  l <- log(l)
+  xlab <- expression(log(lambda))
   
   L.cve <- fit$cve - fit$cvse
   U.cve <- fit$cve + fit$cvse
   y <- fit$cve
   L <- L.cve
   U <- U.cve
-  ylab <- "Deviance"
+  ylab <- switch(fit$type.measure, deviance = "Deviance", 
+                        mae = "Mean Absolute Error", mse = "Mean Squared Error")
   
   ylim <- range(c(L, U))
   ind <- ((U-L)/diff(ylim) > 1e-3)
@@ -41,12 +33,14 @@ plot.cv.rome <- function(fit,...){
   points(l, y, col="red", pch=19, cex=.5)
   beta <- fit$fit$beta
   
-  error.bars(-log(fit$lambda),U.cve,L.cve,width=0.01,col="darkgrey")
+  error.bars(log(fit$lambda),U.cve,L.cve,width=0.01,col="darkgrey")
   abline(v=log(fit$lambda_min),lty=3)
   abline(v=log(fit$lambda_1se),lty=3)
   
-  nv <- predict.rome(fit$fit, lambda = fit$lambda, type = "nonzero")
-  axis(3, at=l, labels=nv, tick=FALSE, line=-0.5)
+  if (nvars){
+    nv <- predict(fit$fit, X=fit$x, lambda = fit$lambda, type = "nvars")
+    axis(3, at=l, labels=nv, tick=FALSE, line=-0.5) 
+  }
 }
 
 
@@ -111,7 +105,7 @@ lambda.interp <- function(lambda,s){
 }
 
 
-check_dots <- function(object, ..., 
+check.dots <- function(object, ..., 
                        need = c("x", "y", "weights", "offset", "penalty.factor",
                                 "lower.limits", "upper.limits"), 
                        error_start = "used coef.rome() or predict.rome() with `exact=TRUE`",
@@ -144,4 +138,13 @@ check_dots <- function(object, ...,
                error_end), call.=FALSE)
   }
   invisible()
+}
+
+error.bars <- function(x,upper,lower,width=0.02,...){
+  xlim <- range(x)
+  barw <- diff(xlim) * width
+  segments(x, upper, x, lower, ...)
+  segments(x - barw, upper, x + barw, upper, ...)
+  segments(x - barw, lower, x + barw, lower, ...)
+  range(upper, lower)
 }

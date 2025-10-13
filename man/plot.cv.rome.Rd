@@ -4,7 +4,7 @@
 \alias{plot.cv.rome}
 \title{plot the cross-validation curve produced by cv.rome}
 \usage{
-\method{plot}{cv.rome}(fit, ...)
+\method{plot}{cv.rome}(fit, nvars = TRUE, ...)
 }
 \arguments{
 \item{x}{fitted \code{"cv.rome"} object}

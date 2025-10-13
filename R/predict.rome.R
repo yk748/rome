@@ -1,4 +1,4 @@
-#' make predictions from a "rome" object.
+#' Make predictions from a "rome" object.
 #'
 #' Similar to other predict methods, this functions predicts fitted values,
 #' coefficients and number of non-zero coefficients from a fitted \code{"rome"} object.
@@ -22,72 +22,73 @@
 #' are made. In this case, it is required to supply the original data \code{x=}
 #' and \code{y=} as additional named arguments to \code{predict()} or
 #' \code{coef()}. 
-#' @seealso \code{rome_adaptive} and \code{cv.rome}.
+#' @seealso \code{rome.adaptive} and \code{cv.rome}.
 #' @keywords models regression
 #' @method predict rome
 #' @export
 #' @export predict.rome
-predict.rome <- function(object, newx, s=NULL, 
-                         type=c("response","coefficients","nonzero"), 
-                         exact = FALSE, ...) {
-  type=match.arg(type)
-  if( missing(newx) ){
+predict.rome <- function(object, 
+                         X, lambda, 
+                         type=c("response","coefficients","nvars"), exact = FALSE, ...) {
+  type <- match.arg(type)
+  if( missing(X) ){
     if(!match(type,c("coefficients","nonzero"),FALSE)){
-      stop( "You need to supply a value for 'newx'" )
+      stop( "You need to supply a value for 'new X'" )
     }
   }
   
-  if( exact&&(!is.null(s)) ){
-    lambda <- object$lambda
-    which <- match(s,lambda,FALSE)
-    if(!all(which>0)){
-      lambda <- unique(rev(sort(c(s,lambda))))
-      check_dots(object,...)
-      object <- update(object,lambda=lambda,...)
-    }
-  }
-  
-  beta <- coef.rome(object,exact = exact)
-  nbeta <- object$beta
-  
-  if(!is.null(s)){
-    vnames <- dimnames(nbeta)[[1]]
-    dimnames(nbeta) <- list(NULL,NULL)
-    lambda <- object$lambda
-    lamlist <- lambda.interp(lambda,s)
-    
-    nbeta <- nbeta[,lamlist$left,drop=FALSE]%*%Diagonal(x=lamlist$frac) +nbeta[,lamlist$right,drop=FALSE]%*%Diagonal(x=1-lamlist$frac)
-    namess <- names(s)
-    if(is.null(namess))namess <- paste0("s",seq(along=s))
-    dimnames(nbeta) <- list(vnames,namess)
+  beta <- coef.rome(object,lambda=lambda,exact=exact)
+  if (is.matrix(beta)) {
+    num_coef <- nrow(beta) 
+  }else {
+    num_coef <- length(beta)
   }
   
   if(type=="coefficients"){
-    return(nbeta)
-  }
-  if(type == "nonzero") {
+    return(beta)
+  } else if (type == "nvars") {
     if (is.matrix(beta)) {
       return(apply(beta!=0, 2, sum))
     }
     else {
       return(sum(beta!=0))
     }
-  }
-  
-  ###Check on newx
-  if(inherits(newx, "sparseMatrix")){
-    newx <- as(newx,"dMatrix")
-  }
-  dx <- dim(newx); p <- object$dim[2]
-  if(is.null(dx)){
-    newx <- matrix(newx,1,byrow=TRUE)
-  }
-  if(ncol(newx) != p){
-    stop(paste0("The number of variables in newx must be ",p))
-  }
-  nfit <- as.matrix(newx %*% beta)
-  nfit
+  } else{
+    return(X %*% beta)  
+  }   
 }
 
-
+coef.rome <- function(object, lambda, exact = FALSE, ...) {
+  if (missing(lambda)) {
+    beta <- object$beta
+    
+  } else if (exact) {
+    # augment the lambda sequence with the new values, and refit the model
+    ls <- object$lambda
+    ind <- match(lambda, ls, 0)
+    if (any(ind == 0)) {
+      ls <- unique(rev(sort(c(lambda,ls))))
+      object <- update(object, lambda=ls)
+      ind <- match(lambda, ls)
+    }
+    beta <- object$beta[, ind]
+    
+  } else {
+    
+    # use linear interpolation to estimate coefficients for supplied lambda
+    ls <- object$lambda
+    lambda[lambda>max(ls)] <- max(ls)
+    lambda[lambda<min(ls)] <- min(ls)
+    ind <- approx(ls, seq(ls), lambda)$y
+    left <- floor(ind)
+    right <- ceiling(ind)
+    weight <- ind %% 1
+    beta <- (1-weight)*object$beta[,left] + weight*object$beta[,right]
+    
+    if (length(lambda) > 1) {
+      colnames(beta) <- round(lambda, 4)
+    }
+  }
+  return(beta)
+}
 
