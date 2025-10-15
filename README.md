@@ -11,7 +11,7 @@ Please email Younghoon Kim
 
 <div id="ref-rome">
 
-Kim, Younghoon, Basu, Sumanta, and Loh, Po-Ling. 2025.
+Kim, Younghoon, Loh, Po-Ling, and Basu, Sumanta. 2025.
 “Exact Coordinate Descent for High-Dimensional Regularized Regularized Huber Regression.” *Preprint*.
 
 <div id="ref-glmnet">
