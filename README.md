@@ -2,7 +2,7 @@
 
 We provide efficient procedures for fitting robust M-estimators with a Lasso penalty. The main idea is to extend the exact coordinate descent algorithm ([2010](#ref-glmnet)) to robust loss functions, such as the Huber loss.
 
-The current version (1.0.0) provides basic functionalities, including model fitting, cross-validation, and illustrative examples. This version includes only the $L_1$-penalized Huber regression but will be continuously updated to incorporate additional loss and penalty functions.
+The current version (1.0.0) provides basic functionalities, including model fitting, cross-validation, and illustrative examples. This version includes only the $L_1$-penalized Huber regression but will be continuously updated to incorporate additional loss and penalty functions. The algorithm is decribed in Kim, Loh, and Basu ([2025](#ref-rome)).
 
 Please email Younghoon Kim
 <yk748@cornell.edu> if you encounter any bugs or errors. All errors are my own.
