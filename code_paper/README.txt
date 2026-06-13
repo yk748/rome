@@ -1,0 +1,3 @@
+The code_paper folder contains seven R scripts and one C-written source code, each named according to its corresponding section in the manuscript "Exact Coordinate Descent for High-Dimensional Regularized Huber Regression."
+
+While each script can be executed independently, running Installations.R first is highly recommended. This script ensures that the required package is successfully installed from the author's GitHub repository, which is necessary to run all scripts apart from Section2_1_1.R.
