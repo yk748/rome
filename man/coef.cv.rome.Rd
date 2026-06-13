@@ -2,17 +2,18 @@
 % Please edit documentation in R/predict.cv.rome.R
 \name{coef.cv.rome}
 \alias{coef.cv.rome}
-\title{Extract coefficients from a "cv.rome" object.}
+\title{Extract coefficients from a \code{"cv.rome"} object.}
 \usage{
-\method{coef}{cv.rome}(object, lambda = c("lambda.lse", "lambda.min"), ...)
+\method{coef}{cv.rome}(object, lambda = c("lambda.1se", "lambda.min"), ...)
 }
 \arguments{
-\item{object}{Fitted \code{"cv.rome"} model object.}
+\item{object}{Fitted \code{"cv.rome"} object.}
 
-\item{lambda}{Value(s) of the penalty parameter \code{lambda}.}
+\item{lambda}{Either a numeric value or one of \code{"lambda.min"} or
+\code{"lambda.1se"}. Default is \code{"lambda.1se"}.}
 
-\item{...}{Additional arguments passed to underlying methods.}
+\item{...}{Additional arguments passed to \code{coef.rome}.}
 }
 \description{
-Extract coefficients from a "cv.rome" object.
+Extract coefficients from a \code{"cv.rome"} object.
 }

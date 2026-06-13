@@ -2,7 +2,7 @@
 % Please edit documentation in R/cv.rome.R
 \name{cv.rome}
 \alias{cv.rome}
-\title{Cross-validation a penalized robust regression}
+\title{Cross-validation for a penalized robust regression}
 \usage{
 cv.rome(
   x,
@@ -11,55 +11,46 @@ cv.rome(
   ncores = 1,
   nfolds = 10,
   foldid = NULL,
+  alpha = 1,
+  preprocess = c("none", "standardize", "rescale"),
   type.measure = c("deviance", "mse", "mae"),
+  track = FALSE,
   ...
 )
 }
 \arguments{
-\item{x}{input matrix, of dimension nobs x nvars;}
+\item{x}{input matrix, of dimension nobs x nvars.}
 
 \item{y}{response variable.}
 
+\item{FUN}{fitting function to use. Default is \code{"rome.adaptive"}.}
+
+\item{ncores}{number of cores for parallel CV. Default is 1.}
+
 \item{nfolds}{number of folds. Default is 10.}
 
-\item{foldid}{an optional vector of values between 1 and \code{nfolds} identifying what fold each observation is in. If supplied, \code{nfolds} can be missing.}
+\item{foldid}{an optional vector of fold assignments (values 1 to nfolds).}
 
-\item{adapt}{a logical flag whether the adaptive (weighting) scheme is used. Default is \code{FALSE}.}
+\item{alpha}{elastic-net mixing parameter in \verb{[0,1]}. \code{alpha=1} is Lasso
+(default), \code{alpha=0} is Ridge. Passed explicitly to \code{FUN} and
+to each fold fit so that CV is always performed at the correct penalty.}
 
-\item{weights}{observation weights. Can be total counts if responses are
-proportion matrices. Default is 1 for each observation}
+\item{preprocess}{preprocessing flag passed to \code{FUN}. One of
+\code{"none"} (default), \code{"standardize"}, or \code{"rescale"}.}
 
-\item{delta}{threshold for Huber loss function. The default is 0.5.}
+\item{type.measure}{loss for CV: \code{"deviance"} (Huber), \code{"mse"},
+or \code{"mae"}.}
 
-\item{nlambda}{Length of a sequence of \code{lambda}. The default length is 100.}
+\item{track}{Logical flag to print progress messages on cross-validation. Default is \code{FALSE}.}
 
-\item{lambda.min}{A ratio for minimum \code{lambda} from its maximum value. The default is 0.05.}
-
-\item{lambda}{a sequence of \code{lambda}. It can be provided by users.}
-
-\item{preprocess}{a logical flag whether the data should be preprocessed. Currently, only \code{none} (no preprocessing) is provided.}
-
-\item{centering}{a logical flag whether the data should be centered. If so, the data is shifted by their mean levels. The default is \code{FALSE}.}
-
-\item{max.iter}{a maximum iteration for each update of a variable at a fixed \code{lambda}. The default is 100.}
-
-\item{eps}{tolerance for convergence, used for stopping criteria. If the screen rules are used, it will be used for scaling the null deviance. If no screen rule is used, each update of a variable is terminated when a ell2 norm for difference between two solutions of consecutive iteration is less than tolerance. The default is 1e-4.}
-
-\item{intercept}{a logical flag whether the intercept is added. If so, the dimension of variable increases by 1. The default is \code{FALSE}.}
-
-\item{screen}{a logical flag whether the adaptive strong screen rule, strong screen rule, or no screen rule (\code{none}) is applied.}
-
-\item{dfmax}{Upper bound for the number of nonzero coefficients. The algorithm exits and
-returns a partial path if \code{dfmax} is reached. Useful for very large dimensions.}
-
-\item{trace}{Logical flag to ask the message for each progress. Default is \code{FALSE}.}
+\item{...}{additional arguments passed to \code{FUN}.}
 }
 \description{
 Does k-fold cross-validation for rome, produces a plot, and returns a
-value for \code{lambda}
+value for \code{lambda}.
 }
 \references{
-Kim, Y. Loh, PL. S. Basu (2025)
+Kim, Y. Loh, PL. S. Basu (2026)
 \emph{Exact Coordinate Descent for High-Dimensional Regularized Huber Regression, Preprint}
 }
 \author{

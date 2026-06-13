@@ -1,4 +1,3 @@
-Type: penalized robust M-estimator
 Package: rome
 Title: Exact Coordinate Descent for Penalized Robust Regression
 Version: 1.0.0
@@ -8,7 +7,7 @@ Authors@R: c(
     person("Sumanta", "Basu", role = "aut")
   )
 Description: Performs exact coordinate descent for penalized robust (e.g.,
-    Huber loss) regression
+    Huber loss) regression.
 License: GPL-3
 Depends: 
     R (>= 4.0.0)

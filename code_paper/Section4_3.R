@@ -1,5 +1,7 @@
 #################################################################################
-# Second Numerical Study - KKT conditions
+# This file is used to generate Table 1 in Section 4.3.
+# This code compares the CPU time of the proposed algorithm with and without 
+# the KKT condition check applied.
 #################################################################################
 # Main loops:
 get_sim <- function(n,p,type,iter_max){
@@ -8,16 +10,17 @@ get_sim <- function(n,p,type,iter_max){
   library("dqrng")
   library("doRNG")
   
-  cl <- makeCluster(50)
+  available_cores <- detectCores()
+  num_cores <- min(available_cores - 1, 50)
+  num_cores <- max(num_cores, 1)
+  cl <- makeCluster(num_cores)
   registerDoParallel(cl)
   
   list_dummy <- list()
-  set.seed(123)
   run_sim <- foreach(iter = 1:iter_max,
                      .errorhandling = 'stop',
-                     .packages = c("Matrix","mvtnorm","rome")) %dopar% {
-                       
-                       source("benchmark_huber.R")
+                     .packages = c("Matrix","mvtnorm","rome"),
+                     .options.RNG = 123) %dopar% {
                        
                        if (type == 5){ # AR t4
                          rho <- 0.4
@@ -57,11 +60,13 @@ get_sim <- function(n,p,type,iter_max){
                          
                        }
                        
+                       huber_grad_vec <- function(v, thresh) {
+                         ifelse(abs(v) <= thresh, v, thresh * sign(v))
+                       }
                        gamma <- 0.5
-                       lambda_max <- max(mapply(j=1:p,function(j)abs(sum(mapply(i=1:n,function(i)
-                         huber_grad(y[i],thresh=gamma) * x[i,j]))/n)))/gamma
-                       lambdas <- mapply(j=0:99,function(j)lambda_max*exp((log(0.05)/(100 - 1)))^j)
-                       
+                       lambda0 <- max(abs(t(huber_grad_vec(y, gamma)) %*% x)/n)
+                       lstep   <- log(0.05) / 100
+                       lambdas <- lambda0 * exp(lstep * 1:100)
                        
                        # ---------------------------------------------------------- #
                        # rome with KKT check:
@@ -108,7 +113,7 @@ get_sim <- function(n,p,type,iter_max){
   save(run_sim,file=paste0("KKT_comparison_type",type,"_p",p,"_n",n,".RData"))
 }
 
-#####################################################################################
+#################################################################################
 # Run simulations:
 iter_max <- 100
 p_vec <- c(50,100,200,500,1000)
@@ -132,7 +137,7 @@ for (i in 1:5){
   }
 }
 
-#####################################################################################
+#################################################################################
 # Display results:
 iter_max <- 100
 p_vec <- c(50,100,200,500,1000)
@@ -142,13 +147,13 @@ type_vec <- c(5,6)
 dat_time <- data.frame()
 for (i in 1:5){
   p <- p_vec[i]
-  
+
   for (j in 1:2){
     n <- n_vec[j]
-    
+
     for (k in 1:2){
       type <- type_vec[k]
-      
+
       cat("The current iteration is p:",p,"n:",n,"type is",type,"\n")
       load(paste0("KKT_comparison_type",type,"_p",p,"_n",n,".RData"))
 
@@ -160,11 +165,13 @@ for (i in 1:5){
                                    P = p,
                                    n = n,
                                    Type = ifelse(type==5,"AR","Block AR")))
-      
+
     }
-    
+
   }
 }
 
+# ---------------------------------------------------------- #
+# Result for Table 1:
 dat_time[order(dat_time$Type),]
 

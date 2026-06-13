@@ -2,16 +2,18 @@
 % Please edit documentation in R/util.rome.R
 \name{plot.cv.rome}
 \alias{plot.cv.rome}
-\title{plot the cross-validation curve produced by cv.rome}
+\title{Plot the cross-validation curve from a \code{"cv.rome"} object.}
 \usage{
-\method{plot}{cv.rome}(fit, nvars = TRUE, ...)
+\method{plot}{cv.rome}(x, nvars = TRUE, ...)
 }
 \arguments{
-\item{x}{fitted \code{"cv.rome"} object}
+\item{x}{Fitted \code{"cv.rome"} object.}
+
+\item{nvars}{Logical; if \code{TRUE} (default), show number of nonzero
+coefficients on the top axis.}
+
+\item{...}{Additional graphical arguments passed to \code{plot}.}
 }
 \description{
-A plot is produced, and nothing is returned.
-}
-\seealso{
-\code{rome_screen} and \code{cv.rome}.
+Plot the cross-validation curve from a \code{"cv.rome"} object.
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/predict.cv.rome.R
 \name{predict.cv.rome}
 \alias{predict.cv.rome}
-\title{Make predictions from a "rome" object.}
+\title{Make predictions from a \code{"cv.rome"} object.}
 \usage{
 \method{predict}{cv.rome}(
   object,
@@ -13,17 +13,18 @@
 )
 }
 \arguments{
-\item{object}{Fitted \code{"rome"} model object.}
+\item{object}{Fitted \code{"cv.rome"} object.}
 
-\item{X}{Matrix of new values for \code{x} at which predictions are to be made.}
+\item{X}{Matrix of new predictor values.}
 
-\item{lambda}{Value(s) of the penalty parameter \code{lambda} at which predictions are required.}
+\item{lambda}{Either a numeric value or one of \code{"lambda.min"} or
+\code{"lambda.1se"}. Default is \code{"lambda.1se"}.}
 
-\item{type}{Type of prediction: "response", "coefficients", or "nvars".}
+\item{type}{Type of prediction: \code{"response"}, \code{"coefficients"},
+or \code{"nvars"}.}
 
-\item{...}{Additional arguments passed to underlying methods.}
+\item{...}{Additional arguments passed to \code{predict.rome}.}
 }
 \description{
-Similar to other predict methods, this function predicts fitted values,
-coefficients, and number of non-zero coefficients from a fitted \code{"rome"} object.
+Make predictions from a \code{"cv.rome"} object.
 }

@@ -10,11 +10,12 @@ rome.adaptive(
   adapt = FALSE,
   method = c("huber"),
   weights = NULL,
+  alpha = 1,
   delta = NULL,
   nlambda = 100,
   lambda.min = 0.05,
   lambda = NULL,
-  preprocess = c("none"),
+  preprocess = c("none", "standardize", "rescale"),
   centering = FALSE,
   max.iter = 1e+05,
   eps = 1e-04,
@@ -28,47 +29,52 @@ rome.adaptive(
 \arguments{
 \item{y}{response variable.}
 
-\item{x}{input matrix, of dimension nobs x nvars;}
+\item{x}{input matrix, of dimension nobs x nvars.}
 
 \item{adapt}{a logical flag whether the adaptive (weighting) scheme is used. Default is \code{FALSE}.}
 
 \item{method}{Choice of loss functions. Currently, \code{huber} is only provided.}
 
-\item{weights}{observation weights. Can be total counts if responses are
-proportion matrices. Default is 1 for each observation}
+\item{weights}{observation weights. Default is 1 for each observation.}
+
+\item{alpha}{elastic-net mixing parameter, between 0 and 1. \code{alpha = 1}
+is the Lasso (default), \code{alpha = 0} is Ridge. Values in between give
+the elastic-net.}
 
 \item{delta}{threshold for Huber loss function. The default is 0.5.}
 
-\item{nlambda}{Length of a sequence of \code{lambda}. The default length is 100.}
+\item{nlambda}{Length of a sequence of \code{lambda}. The default is 100.}
 
 \item{lambda.min}{A ratio for minimum \code{lambda} from its maximum value. The default is 0.05.}
 
 \item{lambda}{a sequence of \code{lambda}. It can be provided by users.}
 
-\item{preprocess}{a logical flag whether the data should be preprocessed. Currently, only \code{none} (no preprocessing) is provided. Currently, \code{none} is only provided.}
+\item{preprocess}{preprocessing flag. One of \code{"none"} (default),
+\code{"standardize"} (center and scale by sd), or \code{"rescale"}
+(shift by min, scale by range).}
 
-\item{centering}{a logical flag whether the data should be centered. If so, the data is shifted by their mean levels. The default is \code{FALSE}.}
+\item{centering}{a logical flag whether the data should be centered. Default is \code{FALSE}.}
 
-\item{max.iter}{a maximum iteration for each update of a variable at a fixed \code{lambda}. The default is 100.}
+\item{max.iter}{maximum iterations per coordinate update. Default is 1e5.}
 
-\item{eps}{tolerance for convergence, used for stopping criteria. If the screen rules are used, it will be used for scaling the null deviance. If no screen rule is used, each update of a variable is terminated when a L2 norm for difference between two solutions of consecutive iteration is less than tolerance. The default is 1e-4.}
+\item{eps}{tolerance for convergence. Default is 1e-4.}
 
-\item{intercept}{a logical flag whether the intercept is added. If so, the dimension of variable increases by 1. The default is \code{FALSE}.}
+\item{intercept}{a logical flag whether the intercept is added. Default is \code{FALSE}.}
 
-\item{screen}{a logical flag whether the adaptive strong screen rule, strong screen rule, or no screen rule (\code{none}) is applied.}
+\item{screen}{screening rule: \code{adaptive}, \code{strong}, or \code{none}.}
 
-\item{KKT}{a logical flag whether the KKT checking is applied. It is just a test purpose. Default is \code{TRUE}.}
+\item{KKT}{a logical flag whether KKT checking is applied. Default is \code{TRUE}.}
 
-\item{dfmax}{Upper bound for the number of nonzero coefficients. The algorithm exits and
-returns a partial path if \code{dfmax} is reached. Useful for very large dimensions.}
+\item{dfmax}{Upper bound for the number of nonzero coefficients. Default is \code{ncol(x)+1}.}
 
-\item{trace}{Logical flag to ask the message for each progress. Default is \code{FALSE}.}
+\item{trace}{Logical flag to print progress messages. Default is \code{FALSE}.}
 }
 \description{
-Fit a penalized weighted  robust regression (Huber loss) via exact coordinate descent algorithm. The weighted are either chosen by users or computed internally.
+Fit a penalized weighted robust regression (Huber loss) via exact coordinate
+descent algorithm. The weights are either chosen by users or computed internally.
 }
 \references{
-Kim, Y. Loh, PL. S. Basu (2025)
+Kim, Y. Loh, PL. S. Basu (2026)
 \emph{Exact Coordinate Descent for High-Dimensional Regularized Huber Regression, Preprint}
 }
 \author{

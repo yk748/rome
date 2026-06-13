@@ -1,55 +1,60 @@
-#' plot the cross-validation curve produced by cv.rome
+#' Plot the cross-validation curve from a \code{"cv.rome"} object.
 #'
-#' A plot is produced, and nothing is returned.
-#'
-#' @aliases plot.cv.rome
-#' @param x fitted \code{"cv.rome"} object
-#' @seealso \code{rome_screen} and \code{cv.rome}.
+#' @param x Fitted \code{"cv.rome"} object.
+#' @param nvars Logical; if \code{TRUE} (default), show number of nonzero
+#'    coefficients on the top axis.
+#' @param ... Additional graphical arguments passed to \code{plot}.
 #'
 #' @method plot cv.rome
+#' @importFrom graphics abline axis points segments
 #' @export
-plot.cv.rome <- function(fit,nvars=TRUE,...){
-  l <- fit$lambda
-  l <- log(l)
-  xlab <- expression(log(lambda))
+plot.cv.rome <- function(x, nvars = TRUE, ...) {
   
-  L.cve <- fit$cve - fit$cvse
-  U.cve <- fit$cve + fit$cvse
-  y <- fit$cve
-  L <- L.cve
-  U <- U.cve
-  ylab <- switch(fit$type.measure, deviance = "Deviance", 
-                        mae = "Mean Absolute Error", mse = "Mean Squared Error")
+  fit  <- x
+  l    <- log(fit$lambda)
+  cve  <- fit$cve
+  L.cv <- cve - fit$cvse
+  U.cv <- cve + fit$cvse
   
-  ylim <- range(c(L, U))
-  ind <- ((U-L)/diff(ylim) > 1e-3)
-  plot.args <- list(x=l, y=y, ylim=ylim, xlab=xlab, ylab=ylab, 
-                    type="n", xlim=rev(range(l)), las=1)
+  ylab <- switch(fit$type.measure,
+                 deviance = "Deviance",
+                 mse      = "Mean Squared Error",
+                 mae      = "Mean Absolute Error"
+  )
+  ylim <- range(c(L.cv, U.cv))
+  
+  plot.args <- list(
+    x    = l, y = cve, ylim = ylim,
+    xlab = expression(log(lambda)), ylab = ylab,
+    type = "n", xlim = rev(range(l)), las = 1
+  )
   new.args <- list(...)
-  if (length(new.args)) {
-    plot.args[names(new.args)] <- new.args
-  }
+  if (length(new.args)) plot.args[names(new.args)] <- new.args
   do.call("plot", plot.args)
-  points(l, y, col="red", pch=19, cex=.5)
-  beta <- fit$fit$beta
   
-  error.bars(log(fit$lambda),U.cve,L.cve,width=0.01,col="darkgrey")
-  abline(v=log(fit$lambda_min),lty=3)
-  abline(v=log(fit$lambda_1se),lty=3)
+  points(l, cve, col = "red", pch = 19, cex = 0.5)
+  error.bars(l, U.cv, L.cv, width = 0.01, col = "darkgrey")
+  abline(v = log(fit$lambda_min), lty = 3)
+  abline(v = log(fit$lambda_1se), lty = 3)
   
-  if (nvars){
-    nv <- predict(fit$fit, X=fit$x, lambda = fit$lambda, type = "nvars")
-    axis(3, at=l, labels=nv, tick=FALSE, line=-0.5) 
+  if (nvars) {
+    nv <- predict.rome(fit$fit, lambda = fit$lambda, type = "nvars")
+    axis(3, at = l, labels = nv, tick = FALSE, line = -0.5)
   }
+  
+  invisible(fit)
 }
 
 
 #' Extract coefficients from a rome object
 #'
+#' @param object Fitted \code{"rome"} object.
+#' @param lambda Optional values of penalty parameter \code{lambda} at which coefficients are requested.
+#' @param exact Logical. If \code{TRUE}, exact coefficients are returned by refitting if needed.
+#' @param ... Additional arguments passed to methods.
+#'
 #' @method coef rome
-#' @rdname predict.rome
 #' @export
-#' @export coef.rome
 coef.rome <- function(object, lambda, exact = FALSE, ...) {
   if (missing(lambda)) {
     beta <- object$beta
@@ -79,29 +84,25 @@ coef.rome <- function(object, lambda, exact = FALSE, ...) {
 }
 
 
-lambda.interp <- function(lambda,s){
-  
-  if(length(lambda)==1){# degenerate case of only one lambda
-    nums <- length(s)
-    left <- rep(1,nums)
+lambda.interp <- function(lambda, s) {
+  k <- length(lambda)
+  if (k == 1L) {
+    nums  <- length(s)
+    left  <- rep(1L, nums)
     right <- left
-    sfrac <- rep(1,nums)
+    sfrac <- rep(1, nums)
+  } else {
+    sfrac  <- (lambda[1] - s) / (lambda[1] - lambda[k])
+    lam    <- (lambda[1] - lambda) / (lambda[1] - lambda[k])
+    sfrac  <- pmin(pmax(sfrac, min(lam)), max(lam))
+    coord  <- approx(lam, seq_along(lam), sfrac)$y
+    left   <- floor(coord)
+    right  <- ceiling(coord)
+    sfrac  <- (sfrac - lam[right]) / (lam[left] - lam[right])
+    sfrac[left == right] <- 1
+    sfrac[abs(lam[left] - lam[right]) < .Machine$double.eps] <- 1
   }
-  else{
-    k <- length(lambda)
-    sfrac <- (lambda[1]-s)/(lambda[1] - lambda[k])
-    lambda <- (lambda[1] - lambda)/(lambda[1] - lambda[k])
-    sfrac[sfrac < min(lambda)] <- min(lambda)
-    sfrac[sfrac > max(lambda)] <- max(lambda)
-    coord <- approx(lambda, seq(lambda), sfrac)$y
-    left <- floor(coord)
-    right <- ceiling(coord)
-    sfrac <- (sfrac-lambda[right])/(lambda[left] - lambda[right])
-    sfrac[left==right] <- 1
-    sfrac[abs(lambda[left]-lambda[right])<.Machine$double.eps] <- 1
-    
-  }
-  list(left=left,right=right,frac=sfrac)
+  list(left = left, right = right, frac = sfrac)
 }
 
 
@@ -140,11 +141,11 @@ check.dots <- function(object, ...,
   invisible()
 }
 
-error.bars <- function(x,upper,lower,width=0.02,...){
+error.bars <- function(x, upper, lower, width = 0.02, ...) {
   xlim <- range(x)
   barw <- diff(xlim) * width
-  segments(x, upper, x, lower, ...)
+  segments(x,        upper, x,        lower, ...)
   segments(x - barw, upper, x + barw, upper, ...)
   segments(x - barw, lower, x + barw, lower, ...)
-  range(upper, lower)
+  invisible(range(upper, lower))
 }
